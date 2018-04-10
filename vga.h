@@ -5,6 +5,6 @@ void vgaSetChar(int index, char c);
 void vgaSetCharLc(int line, int col, char c);
 
 void vgaCls();
-void vgaPutc(char c);
+void vgaPutChar(char c);
 
 #endif

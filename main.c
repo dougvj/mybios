@@ -1,5 +1,6 @@
 #include "vga.h"
-
+#include "output.h"
+#include "runtime_init.h"
 
 void print() {
     static int count = 0;
@@ -24,5 +25,9 @@ void main() {
     print();
     print();
     print();
+    for (;;) {
+        asm("xchg %bx, %bx");
+        printf("%s: %i 0x%x\n", "Now does this work or nah?", loc, loc);
+    }
 }
 

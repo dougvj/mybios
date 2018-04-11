@@ -1,5 +1,6 @@
 #include "vga.h"
 #include <stdarg.h>
+#include "io.h"
 
 void itoa(int value, char* buf, int base) {
     int len = 0;
@@ -27,11 +28,13 @@ void itoa(int value, char* buf, int base) {
             buf[len-i-1] = tmp;
         }
     }
+    if (len == 0)
+        buf[len++] = '0';
     buf[len] = '\0';
 }
 
 //printf that supports only some of the common formats, namely %i/%d, %u and %f
-int printf(const char* format, ...) {
+void printf(const char* format, ...) {
     va_list args;
     va_start(args, format);
     char *s = (char*)format;
@@ -61,11 +64,13 @@ int printf(const char* format, ...) {
             }
             s++;
             while (*ins != '\0') {
-             vgaPutChar(*ins++);
+                vgaPutChar(*ins++);
+//                outb(0x402, *ins);
             }
         }
          else {
             vgaPutChar(*s);
+//            outb(0x402, *s);
             s++;
         }
     }

@@ -4,8 +4,8 @@ OUTPUT_ARCH("i386");
 ENTRY("main")
 MEMORY 
 {
-    RAM_DATA (rw) : ORIGIN = 0x2400, LENGTH = 3072
-    RAM_BSS (rw) : ORIGIN = 0x400, LENGTH = 3072
+    RAM_DATA (rw) : ORIGIN = 0x400, LENGTH = 1024
+    RAM_BSS (rw) : ORIGIN = 0x800, LENGTH = 1024
     ROM (rx) : ORIGIN = 0xF0000, LENGTH = 64k
 }
 
@@ -19,12 +19,12 @@ SECTIONS
         *(.rodata*) 
         _text_end = .;
     }
-    .data 0x2400: AT(ADDR(.text) + SIZEOF(.text)){
+    .data 0x400: AT(ADDR(.text) + SIZEOF(.text)){
         _data_start = .;
         *(.data)
         _data_end = .;
     }
-    .bss 0x400: AT(ADDR(.data) + SIZEOF(.data)){
+    .bss 0x800: AT(ADDR(.data) + SIZEOF(.data)){
         _bss_start = .;
         *(.bss)
         _bss_end = .;

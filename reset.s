@@ -244,8 +244,8 @@ _32main:
     mov fs, ax
     mov gs, ax
     mov ss, ax
-    mov ebp, 0x2400
-    mov esp, 0x2400
+    mov ebp, 0x2000
+    mov esp, 0x2000
     PCODE 0x09
     mov ecx, 0
     mov esi, ProtectedStr
@@ -261,9 +261,7 @@ _32main:
     test al, al
     jnz .loop
     cli
-    ;xchg bx, bx
-    call c_start
-    hlt
+    jmp c_start
 
 BITS 16
 TIMES 0xFFF0 - ($ - $$) db 0

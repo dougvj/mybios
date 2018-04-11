@@ -14,24 +14,22 @@ void vgaSetCharLc(int line, int col, char c) {
 }
 
 void vgaCls() {
-    for (int i = 0; i <  80; i++) {
-        for (int j = 0; j < 25; j++) {
-            vgaSetCharLc(j, i, ' ');
-        }
+    int* output = (int*) TXT_BASE;
+    for (int i = 0; i < 1000; i++) {
+        output[i] = 0x1f201f20;
     }
 }
 
 void vgaScroll() {
-    char* output = (char*) TXT_BASE;
+    int* output = (int*) TXT_BASE;
     for (int line = 1; line < 25; line++) {
-        for (int col = 0; col < 160; col++) {
-            output[col + (line - 1) * 160] = output[col + line * 160];
+        for (int col = 0; col < 40; col++) {
+            output[col + (line - 1) * 40] = output[col + line * 40];
         }
     }
     //Blank the last line
-    for (int col = 0; col < 80; col++) {
-        output[160 * 24 + col * 2] = ' ';
-        output[160 * 24 + col * 2 + 1] = 0x1F;
+    for (int i = 0; i < 40; i++) {
+        output[40 * 24 + i] = 0x1f201f20;
     }
 }
 
@@ -47,12 +45,13 @@ void vgaPutChar(char c) {
         default:
             vgaSetCharLc(cur_line, cur_col, c);
             cur_col++;
+            break;
     }
-    if (cur_col == 80) {
+    if (cur_col >= 80) {
         cur_line++;
         cur_col = 0;
     }
-    if (cur_line == 25) {
+    if (cur_line >= 25) {
         vgaScroll();
         cur_line = 24;
     }

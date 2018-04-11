@@ -96,10 +96,11 @@ void checkRam() {
     printf("\n%d KB Conventional Memory\n", lower / 1024);
     printf("%d KB Upper Memory\n", upper / 1024);
     printf("%d KB Total\n", (lower + upper) / 1024);
-    printf("Testing Conventional Memory\n");
+/*    printf("Testing Conventional Memory\n");
     testRam(0x0, lower, 1);
     printf("\nTesting Upper Memory\n");
     testRam(0x100000, upper, 1);
+    printf("\n"); */
 
 
 }

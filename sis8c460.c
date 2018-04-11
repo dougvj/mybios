@@ -58,7 +58,6 @@ void detectDramConfig() {
         //Reset the stack
         asm("mov $0x2000, %esp\n"
             "mov $0x2000, %ebp");
-        asm("xchg %bx, %bx");
         asm("jmp 0xF0000");
     } else {
         printf("DRAM Initialized\n");
@@ -106,7 +105,6 @@ void setShadowRam() {
         *(unsigned int*)(0x100000 + i) = *(unsigned int*)(0xC0000 + i);
     }
     //We jump out to tmp area while setting up shadowing
-    asm("xchg %bx, %bx");
     asm("jmp . + 0x40000 + 0x5");
     writeReg(0x52, 0xBF);
     for (int i = 0; i < 0x40000; i+=4) {
@@ -114,7 +112,6 @@ void setShadowRam() {
     }
     writeReg(0x52, 0xFF);
     //Jump back to shadow area
-    asm("xchg %bx, %bx");
     asm("jmp . - 0x40000 + 0x5");
     printf("OK\n");
 }

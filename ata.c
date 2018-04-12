@@ -47,26 +47,8 @@ unsigned char ataStatus() {
 #define ATA_IDENTIFY 0xEC
 void ataIdentify(unsigned char drv) {
     ataDrive(drv);
-    ataDrive(drv);
-    ataDrive(drv);
-    ataDrive(drv);
-    ataSectorCount(0);
-    ataSectorCount(0);
-    ataSectorCount(0);
-    ataSectorCount(0);
     ataSectorCount(0);
     ataLBA(0);
-    ataLBA(0);
-    ataLBA(0);
-    ataLBA(0);
-    ataLBA(0);
-    ataLBA(0);
-    ataCommand(ATA_IDENTIFY);
-    ataCommand(ATA_IDENTIFY);
-    ataCommand(ATA_IDENTIFY);
-    ataCommand(ATA_IDENTIFY);
-    ataCommand(ATA_IDENTIFY);
-    ataCommand(ATA_IDENTIFY);
     ataCommand(ATA_IDENTIFY);
     unsigned char status;
     while (status = ataStatus()) {
@@ -100,7 +82,21 @@ void ataIdentify(unsigned char drv) {
         model[((i - 27) << 1)] = (ident[i] & 0xFF00) >> 8;
     }
     model[40] = '\0';
-    printf("%s\n", model);
+    unsigned int blocks = ident[60] | (ident[61] << 16);
+    printf("Detected\n  %s ", model);
+    if (blocks > 0) {
+        unsigned int size_mb = (blocks * 512) / 1024 / 1024;
+        printf("LBA, %d MB\n", size_mb);
+    } else {
+        if (ident[53] & 0x1) {
+            unsigned int blocks = ident[57] | (ident[58] << 16);
+            unsigned int size_mb = (blocks * 512) / 1024 / 1024;
+            printf("CHS, %d MB\n");
+        } else {
+            printf("??? Older drive suspected\n");
+        }
+    }
+
 }
 
 void ataSetController(int controller) {

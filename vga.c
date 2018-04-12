@@ -14,6 +14,7 @@ void vgaSetCharLc(int line, int col, char c) {
 }
 
 void vgaCls() {
+    cur_line = 0, cur_col = 0;
     int* output = (int*) TXT_BASE;
     for (int i = 0; i < 1000; i++) {
         output[i] = 0x1f201f20;

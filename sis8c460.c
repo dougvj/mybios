@@ -35,6 +35,7 @@ int detectMirroring(unsigned int size) {
     return 0;
 }
 
+extern void main();
 void detectDramConfig() {
     if (readDramConfig() == 0) {
         printf("DRAM has not been initialized\n");
@@ -54,11 +55,20 @@ void detectDramConfig() {
                 }
             }
         }
+        //Preserve video interrupt handler that was maybe setup by the video ROM
+        register int vga_ivt = *(volatile int*)(0x40);
         configDram(best_cfg);
+        if (vga_ivt != *(volatile int*)(0x40)) {
+            *(int*)(0x40) = vga_ivt;
+            cls();
+            printf("Resetting IVT 0x%x\n", vga_ivt);
+            for (int i = 0; i < 1000000; i++)
+                asm("");
+        }
         //Reset the stack
         asm("mov $0x2000, %esp\n"
             "mov $0x2000, %ebp");
-        asm("jmp 0xF0000");
+        asm("jmp main");
     } else {
         printf("DRAM Initialized\n");
     }

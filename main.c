@@ -6,11 +6,13 @@
 #include "chipset.h"
 #include "ata.h"
 
+char test_data_init[] = "Runtime initialized successfully\n";
+
 void main() {
-    initRuntime();
     vgaCls();
-    printf("MyBIOS v0.01 Alpha. Doug Johnson (2018). C Code Entry Point\n");
-    asm("xchg %bx, %bx");
+    initRuntime();
+    printf("MyBIOS %s. Doug Johnson (%s). C Code Entry Point\n", "Pre-Alpha", "2020");
+    printf("%s", test_data_init);
     initChipset();
     doPost();
     ataInit();

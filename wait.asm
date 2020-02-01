@@ -1,3 +1,4 @@
+SECTION .real_mode_text
 BITS 16
 global wait_forever
 wait_forever:

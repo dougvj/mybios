@@ -13,8 +13,8 @@ extern init_video
 extern main
 extern enter_protected_mode
 
-SECTION .text
-start:
+SECTION .real_mode_text
+entry_point:
     cli
     PCODE 0x00
     call wait_forever
@@ -29,7 +29,7 @@ start:
     mov bx, [ds:0x0000]
     cmp ax, bx
     ;If ram isn't stable, keep trying
-    jne start
+    jne entry_point
     mov ax, 0x0000
     mov ss, ax
     mov bp, 0x400
@@ -38,14 +38,15 @@ start:
     PCODE 0x04
     call init_video
     PCODE 0x08
-    jmp enter_protected_mode
+    jmp dword enter_protected_mode
 
+SECTION .reset
 BITS 16
+global reset_vector
+jmp dword entry_point
+
 SECTION .enter_protected_mode
+BITS 16
 incbin "enter_protected_mode.bin"
 BITS 32
 call main
-BITS 16
-SECTION .reset
-reset_vector:
-    jmp dword start

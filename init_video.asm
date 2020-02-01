@@ -1,5 +1,7 @@
+SECTION .real_mode_text
 BITS 16
 %include "pcode.asm"
+
 global init_video
 init_video:
     push ds
@@ -25,7 +27,6 @@ init_video:
     mov [ds:0x0002], bx
     mov bx, 0x0003
     mov [ds:0x0000], bx
-    xchg bx, bx
     call far [ds:0x0000]
     pop ds
     ret

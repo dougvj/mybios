@@ -24,7 +24,6 @@ void ataLBA(unsigned int addr) {
 }
 
 int ataDetectController() {
-    asm("xchg %bx, %bx");
     outb(_base_port + 2, 0xA5);
     unsigned char controller = inb(_base_port + 2);
     return (controller == 0xA5);

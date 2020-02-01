@@ -91,9 +91,8 @@ unsigned int probeAll(unsigned int stride, unsigned int top, int print_message) 
 
 void checkRam() {
     unsigned int lower = probeRam(0x0, 0x400, 1);
-    printf("\n");
     unsigned int upper = probeRam(0x100000, 0x400, 1);
-    printf("\n%d KB Conventional Memory\n", lower / 1024);
+    printf("%d KB Conventional Memory\n", lower / 1024);
     printf("%d KB Upper Memory\n", upper / 1024);
     printf("%d KB Total\n", (lower + upper) / 1024);
 /*    printf("Testing Conventional Memory\n");

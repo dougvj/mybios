@@ -33,7 +33,7 @@ void itoa(int value, char* buf, int base) {
     buf[len] = '\0';
 }
 
-//printf that supports only some of the common formats, namely %i/%d, %u and %f
+//printf that supports only some of the common formats, namely %i,%n
 void printf(const char* format, ...) {
     va_list args;
     va_start(args, format);
@@ -61,6 +61,9 @@ void printf(const char* format, ...) {
                 case 's':
                     ins = va_arg(args, char*);
                     break;
+                default:
+                    va_arg(args, char*);
+                    ins = "";
             }
             s++;
             while (*ins != '\0') {

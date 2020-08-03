@@ -2,10 +2,10 @@
 #include <stdarg.h>
 #include "io.h"
 
-void itoa(int value, char* buf, int base) {
+void itoa(unsigned int value, char* buf, int base) {
     int len = 0;
     while (value != 0) {
-        int d = value % base;
+        unsigned int d = value % base;
         value = value / base;
         char c;
         if (d < 10) {

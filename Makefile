@@ -32,9 +32,10 @@ padded: bios.bin
 	echo -n -e '\xEF\xBE\xAD\xDE' > __signature
 	dd if=/dev/zero of=__padding count=65532 bs=1 
 	cat __signature __padding > __bank
-	cat __bank __bank __bank bios.bin > padded_bios.bin
+	cat __bank bios.bin > padded_bios_128k.bin
+	cat __bank __bank __bank bios.bin > padded_bios_256k.bin
 	rm __padding __signature __bank
-	chmod +x  padded_bios.bin
+	chmod +x  padded_bios_*.bin
 
 rom.ld: rom_template.ld 
 	cpp -P rom_template.ld -o rom.ld

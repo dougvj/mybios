@@ -6,7 +6,7 @@ CFLAGS=-fno-stack-protector \
 	   -fno-pic \
 	   -nostdlib \
 	   -m32 \
-	   -march=i486\
+	   -march=i386\
 	   -ffreestanding \
 	   -fno-builtin \
 	   -fno-asynchronous-unwind-tables \
@@ -27,6 +27,14 @@ all: bios.bin
 
 debug: bios.bin bios.sym 
 	bochs -q
+
+padded: bios.bin
+	echo -n -e '\xEF\xBE\xAD\xDE' > __signature
+	dd if=/dev/zero of=__padding count=65532 bs=1 
+	cat __signature __padding > __bank
+	cat __bank __bank __bank bios.bin > padded_bios.bin
+	rm __padding __signature __bank
+	chmod +x  padded_bios.bin
 
 rom.ld: rom_template.ld 
 	cpp -P rom_template.ld -o rom.ld

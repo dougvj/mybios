@@ -5,6 +5,7 @@
 #include "post.h"
 #include "chipset.h"
 #include "ata.h"
+#include "pci.h"
 
 char test_data_init[] = "Runtime initialized successfully\n";
 
@@ -15,6 +16,7 @@ void main() {
     printf("%s", test_data_init);
     initChipset();
     doPost();
+    pci_enumerate();
     ataInit();
     asm("hlt");
 }

@@ -29,7 +29,7 @@ optramimage3: file=none
 optramimage4: file=none
 pci: enabled=1, chipset=i440fx
 vga: extension=vbe, update_freq=5, realtime=1
-cpu: count=1:1:1, ips=4000000, quantum=16, model=pentium, reset_on_triple_fault=1, cpuid_limit_winnt=0, ignore_bad_msrs=1, mwait_is_nop=0
+cpu: count=1:1:1, ips=1000000, model=pentium, reset_on_triple_fault=1, cpuid_limit_winnt=0, ignore_bad_msrs=1, mwait_is_nop=0
 print_timestamps: enabled=0
 debugger_log: -
 debug_symbols: file="bios.sym"
@@ -41,7 +41,7 @@ clock: sync=none, time0=local, rtc_sync=0
 # no loader
 log: -
 logprefix: %t%e%d
-debug: action=ignore
+debug: action=report
 info: action=report
 error: action=report
 panic: action=ask

@@ -1,13 +1,30 @@
 #include "vga.h"
 #include <stdarg.h>
 #include "io.h"
+#include "serial.h"
+#include "types.h"
 
-void itoa(unsigned int value, char* buf, int base) {
+void putc(char c)
+{
+    vgaPutChar(c);
+#ifdef ENABLE_SERIAL
+    if (c == '\n') {
+        serial_write('\r');
+    }
+    serial_write(c);
+#endif
+    // This is a bochs thing?
+#ifdef BOCHS
+    outb(0x402, c);
+#endif
+}
+
+void itoa(dword value, char* buf, int base) {
     int len = 0;
     while (value != 0) {
-        unsigned int d = value % base;
+        dword d = value % base;
         value = value / base;
-        char c;
+        byte c;
         if (d < 10) {
             c = 0x30 + d;
         }
@@ -43,18 +60,18 @@ void printf(const char* format, ...) {
             s++;
             char* ins;
             char conv[10];
-            int value;
+            dword value;
              switch (*s) {
                 case 'u':
                 case 'd':
                 case 'i':
-                    value = va_arg(args, int);
+                    value = va_arg(args, dword);
                     itoa(value, conv, 10);
                     ins = conv;
                     break;
                 case 'x':
                 case 'X':
-                    value = va_arg(args, int);
+                    value = va_arg(args, dword);
                     itoa(value, conv, 16);
                     ins = conv;
                     break;
@@ -67,12 +84,12 @@ void printf(const char* format, ...) {
             }
             s++;
             while (*ins != '\0') {
-                vgaPutChar(*ins++);
+                putc(*ins++);
 //                outb(0x402, *ins);
             }
         }
          else {
-            vgaPutChar(*s);
+            putc(*s);
 //            outb(0x402, *s);
             s++;
         }
@@ -80,3 +97,12 @@ void printf(const char* format, ...) {
     va_end(args);
 }
 
+void dumpmem(dword addr, dword len) {
+  for (dword i = 0; i < len; i++) {
+    if ((i & 0x7) == 0) {
+      printf("\n%X: ", addr + i);
+    }
+    printf("%X ", (dword)(*(byte*)(addr + i)));
+  }
+  printf("\n");
+}

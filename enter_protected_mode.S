@@ -2,6 +2,7 @@ BITS 16
 ORG 0xFFF70
 %include "pcode.asm"
 protect:
+    push eax
     cli
     mov ax, 0xF000
     mov ds, ax
@@ -18,15 +19,17 @@ BITS 32
     mov fs, ax
     mov gs, ax
     mov ss, ax
-    mov ebp, 0x2000
-    mov esp, 0x2000
     PCODE 0x09
-    jmp end
+    pop eax
+    jmp eax
 gdt:
 dd 0x00000000, 0x00000000
 dd 0x0000ffff, 0x00Cf9a00
 dd 0x0000ffff, 0x00Cf9200
+; Used for switching to real mode, G = 0, DB=0
+dd 0x0000ffff, 0x000f9a00
+; Unused, 16-bit prot data
+dd 0x0000ffff, 0x000f9200
 gdtr:
 dw gdtr - gdt - 1
 dd gdt
-end:

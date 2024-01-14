@@ -22,21 +22,25 @@ SECTIONS
     }
     .text .  :  {
         *(.text*)
-    } 
+    }
     .rodata . : {
-        *(.rodata*) 
-    } 
+        *(.rodata*)
+    }
     .data : AT(ADDR(.rodata) + SIZEOF(.rodata)) {
         _data_start = .;
         *(.data)
         _data_end = .;
-    } > RAM32 
+    } > RAM32
     _data_load_start = LOADADDR(.data);
     #define REAL_MODE_TEXT_LOCATION \
         (MAX(0xFFFF0000, 0xFFFF0000 + (SIZEOF(.signature) + SIZEOF(.data) + SIZEOF(.rodata) + SIZEOF(.text)) - (ROM_SIZE - 64K)))
     .real_mode_text REAL_MODE_TEXT_LOCATION - 0xFFF00000 : AT(REAL_MODE_TEXT_LOCATION)  {
         *(.real_mode_text*);
-    } 
+    }
+    .call_real_mode 0xFFF20 : AT(0xFFFFFF20)  {
+        call_real_mode = .;
+        *(.call_real_mode*);
+    }
     .enter_protected_mode 0xFFF70 : AT(0xFFFFFF70)  {
         enter_protected_mode = .;
         *(.enter_protected_mode*);

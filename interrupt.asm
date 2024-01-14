@@ -5,19 +5,61 @@ default REL
 global fill_dummy_ivt
 global install_ivt
 
+extern serial_write_string
+extern serial_write_byte
+extern serial_write_hex
+
 fill_dummy_ivt:
-    mov eax, dummy_handler
-    mov cx, 0x100
     xor bx, bx
+    mov eax, int0
+    mov cx, 0x100
 .loop:
     call install_ivt
     inc bx
+    add eax, int1-int0
     cmp bx, cx
     jl .loop
     ret
 
-dummy_handler:
+
+msg:
+  db "Interrupt Handler: ", 0
+endl:
+  db 0xa, 0xd, 0
+
+print_handler:
+    push ds
+    xchg ax, bx
+    mov ax, 0xF000
+    mov ds, ax
+    xchg ax, bx
+    push esi
+    mov esi, msg
+    call serial_write_string
+    call serial_write_hex
+    mov esi, endl
+    call serial_write_string
+    pop esi
+    pop ds
+    pop eax
+    mov bx, 0x1234
+    mov ax, 0x4321
     iret
+
+%macro interrupt_handler 1
+int%1:
+    push eax
+    mov eax, %1
+    jmp word print_handler
+%endmacro
+
+
+%assign i 0
+%rep 256
+interrupt_handler i
+%assign i i + 1
+%endrep
+
 
 ;ax address of vector
 ;bx interrupt to install
@@ -36,3 +78,15 @@ install_ivt:
     pop ds
     ret
 
+global call_int
+call_int:
+    push ds
+    push ax
+    mov ax, 0x0
+    mov ds, ax
+    pop ax
+    shl di, 2
+    pushf
+    call far [ds:di]
+    pop ds
+    retf

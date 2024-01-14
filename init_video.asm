@@ -18,7 +18,8 @@ init_video:
     cmp bx, 0xC800
     jne .search_video
     PCODE 0xEE
-    hlt
+    pop ds
+    ret
 .call_video:
     PCODE 0x07
     ;Use BIOS RAM area for our jump vector for now

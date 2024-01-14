@@ -3,25 +3,25 @@
 #include "post.h"
 #include "postcode.h"
 
-void writeReg(char reg, char byte) {
+static void writeReg(char reg, char byte) {
     outb(0x22, reg);
     outb(0x23, byte);
 }
 
-unsigned char readReg(char reg) {
+static unsigned char readReg(char reg) {
     outb(0x22, reg);
     return inb(0x23);
 }
 
-void configDram(unsigned char cfg) {
+static void configDram(unsigned char cfg) {
     writeReg(0x50, cfg);
 }
 
-unsigned char readDramConfig() {
+static unsigned char readDramConfig() {
     return readReg(0x50);
 }
 
-int detectMirroring(unsigned int size) {
+static int detectMirroring(unsigned int size) {
     for (int i = 0x100000; i < size; i+= 0x80000) {
         int* probe = (int*) i;
         *probe = i;
@@ -36,7 +36,7 @@ int detectMirroring(unsigned int size) {
 }
 
 extern void main();
-void detectDramConfig() {
+static void detectDramConfig() {
     if (readDramConfig() == 0) {
         printf("DRAM has not been initialized\n");
         unsigned char best_cfg = 0;
@@ -80,7 +80,7 @@ void detectDramConfig() {
 #define DRAM_SLOWEST 0x0
 #define CAS_1T  0x1
 #define CAS_2T  0x0
-void setRamSpeed(int speed, int cas) {
+static void setRamSpeed(int speed, int cas) {
     printf("Setting DRAM Speed...");
     char c = readDramConfig();
     c &= 0x1F;
@@ -94,7 +94,7 @@ void setRamSpeed(int speed, int cas) {
 #define CACHE_64KB 0x01
 #define CACHE_128KB 0x02
 #define CACHE_256KB 0x03
-void setCPUCache(int en, int size, int write_back_en, int interleave, int write_cycle_2t, int burst_read) {
+static void setCPUCache(int en, int size, int write_back_en, int interleave, int write_cycle_2t, int burst_read) {
     printf("Enabling CPU Cache...");
     char c = 0;
     c |= burst_read;
@@ -108,7 +108,7 @@ void setCPUCache(int en, int size, int write_back_en, int interleave, int write_
     printf("OK\n");
 }
 
-void setShadowRam() {
+static void setShadowRam() {
     printf("Enabling BIOS Shadow RAM...");
     //Copy BIOS contents to temp area
     for (int i = 0; i < 0x40000; i+=4) {
@@ -127,7 +127,7 @@ void setShadowRam() {
 }
 #define BIOS_SIZE_64K 0
 #define BIOS_SIZE_128K 1
-void setBiosRomOptions(int cacheable, int size, int combine) {
+static void setBiosRomOptions(int cacheable, int size, int combine) {
     printf("Setting BIOS ROM Options (Cachable Shadow/Rom Size)...");
     char c = readReg(0x53);
     c &= 0x0F;
@@ -139,7 +139,7 @@ void setBiosRomOptions(int cacheable, int size, int combine) {
     printf("OK\n");
 }
 
-void setDeturboEnable(int deturbo) {
+static void setDeturboEnable(int deturbo) {
     printf("Setting Turbo/Deturbo (Allow turbo switch)...");
     char c = readReg(0x53);
     c &= 0xFE;
@@ -148,14 +148,14 @@ void setDeturboEnable(int deturbo) {
     printf("OK\n");
 }
 
-void setBusClockOptions(int spd, int b16_time, int b8_time) {
+static void setBusClockOptions(int spd, int b16_time, int b8_time) {
     printf("Setting Bus Speed options...");
     writeReg(0x60, spd << 4);
     writeReg(0x61, b16_time << 6 | b8_time << 4 | 0xF);
     printf("OK\n");
 }
 
-void initChipset() {
+void chipset_init() {
     printf("Attempting to initialize Chipset SiS85C460\n");
     postCode(0xC1);
     detectDramConfig();
@@ -172,4 +172,19 @@ void initChipset() {
     postCode(0xC7);
     setBusClockOptions(0x7, 0x3, 0x3);
     printf("Chipset Initialized\n");
+}
+
+bool chipset_has_rom_shadowing() {
+  return false;
+}
+
+bool chipset_has_pci() {
+  return false;
+}
+
+dword chipset_pci_config_read(dword base_config_ddress, dword offset) {
+  return 0;
+}
+
+void chipset_pci_config_write(dword base_config_ddress, dword offset, dword value) {
 }

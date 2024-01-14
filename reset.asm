@@ -6,7 +6,9 @@ extern fill_dummy_ivt
 extern init_video
 extern main
 extern enter_protected_mode
-
+extern init_serial
+extern serial_write_hex
+extern serial_write_byte
 
 %macro WAIT 1
     push ax
@@ -61,7 +63,7 @@ test_byte:
     mov [ds:si], al
     mov bl, [ds:si]
     cmp al, bl
-    jne test_fail 
+    jne test_fail
     inc si
     jz init_runtime_16
     jmp test_byte
@@ -77,25 +79,30 @@ init_runtime_16:
     PCODE 0x02
     mov ax, 0x0000
     mov ss, ax
-    mov bp, 0x400
+    mov bp, 0x7C00
+    mov sp, bp
     PCODE 0x03
     call fill_dummy_ivt
     PCODE 0x04
+    call init_serial
+    ;int 0x10
+    int 0x80
+    xchg bx, bx
     call init_video
     PCODE 0x08
+    mov eax, main
     jmp dword enter_protected_mode
 
 SECTION .reset
 BITS 16
 global reset_vector
 PCODE 0xCA
-jmp dword init_runtime_16
-
+jmp dword entry_point
+SECTION .call_real_mode
+BITS 32
+incbin "call_real_mode_S.bin"
 SECTION .enter_protected_mode
 BITS 16
-incbin "enter_protected_mode.bin"
-BITS 32
-PCODE 0x10
-call main
+incbin "enter_protected_mode_S.bin"
 SECTION .signature
 dd 0xDEADBEEF

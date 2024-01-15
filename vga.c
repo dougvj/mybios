@@ -1,5 +1,5 @@
 #define TXT_BASE 0xB8000
-
+#include "io.h"
 static char cur_line = 0, cur_col = 0;
 
 void vgaSetChar(int index, char c) {
@@ -13,8 +13,17 @@ void vgaSetCharLc(int line, int col, char c) {
     vgaSetChar(index, c);
 }
 
-void vgaCls() {
-    cur_line = 0, cur_col = 0;
+void vgaSetCursor(int line, int col) {
+    int index = line * 80 + col;
+    cur_line = line, cur_col = col;
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (unsigned char)(index & 0xFF));
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (unsigned char)((index >> 8) & 0xFF));
+}
+
+void vgaCls(int line) {
+    cur_line = line, cur_col = 0;
     int* output = (int*) TXT_BASE;
     for (int i = 0; i < 1000; i++) {
         output[i] = 0x1f201f20;
@@ -56,4 +65,5 @@ void vgaPutChar(char c) {
         vgaScroll();
         cur_line = 24;
     }
+    vgaSetCursor(cur_line, cur_col);
 }

@@ -10,7 +10,7 @@ ENTRY("reset_vector")
 MEMORY
 {
     RAM (rw) : ORIGIN = 0x9FC00, LENGTH = 1K
-    RAM32 (rw) : ORIGIN = 0x100000, LENGTH = 1M
+    RAM32 (rw) : ORIGIN = 0x80000, LENGTH = 1M
     LOWER_ROM (rx) : ORIGIN = 0xF0000, LENGTH = 64K
     UPPER_ROM (rx) : ORIGIN = ROM_START, LENGTH = ROM_SIZE
 }

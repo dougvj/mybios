@@ -104,6 +104,25 @@ void checkRam() {
 
 }
 
+int read_pit() {
+    outb(0x43, 0x00);
+    unsigned char l = inb(0x40);
+    unsigned char h = inb(0x40);
+    return (h << 8) | l;
+}
+
+int probeSpeed() {
+  int start = read_pit();
+  for (int i = 0; i < 10000; i++) {
+    asm("nop");
+  }
+  int end = read_pit();
+  if (end < start) {
+    end += 0x10000;
+  }
+  return (int)((end - start));
+}
+
 void doPost() {
     checkRam();
 }

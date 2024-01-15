@@ -188,3 +188,10 @@ dword chipset_pci_config_read(dword base_config_ddress, dword offset) {
 
 void chipset_pci_config_write(dword base_config_ddress, dword offset, dword value) {
 }
+
+dword chipset_pci_config_address(byte bus, byte dev, byte func, byte offset) {
+  return 0;
+}
+
+void chipset_shadow_rom_from_src(dword address, dword size, dword src) {
+}

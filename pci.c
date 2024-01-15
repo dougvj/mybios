@@ -9,6 +9,8 @@
 #include "types.h"
 #include "util.h"
 
+#ifdef PCI_ENABLED
+
 dword pci_type2_config_address(byte bus, byte device, byte func, byte offset) {
   dword address = 0x1 << 31 | (bus & 0x7F) << 16 | (device & 0x1F) << 11 |
                   (func & 0x7) << 8 | (offset & 0xFC);
@@ -209,3 +211,10 @@ void pci_configure() {
 void pci_device_free(pci_device *dev) {
   // TODO
 }
+
+#else // PCI_ENABLED
+
+void pci_configure() {
+}
+
+#endif // PCI_ENABLED

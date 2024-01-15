@@ -15,8 +15,9 @@ CFLAGS=-fno-stack-protector \
 
 CC=gcc
 #CHIPSET=440fx
-CHIPSET=null
+#CHIPSET=null
 #CHIPSET=sis8c460
+CHIPSET=um82c480
 C_SRC = $(wildcard *.c)
 ASM_SRC = $(wildcard *.asm)
 ASM_BLOB_SRC = $(wildcard *.S)
@@ -29,7 +30,7 @@ all: bios.bin
 
 DEFINES=
 #DEFINES += -DBOCHS
-#DEFINES += -DENABLE_SERIAL
+DEFINES += -DENABLE_SERIAL
 CFLAGS += $(DEFINES)
 ASMFLAGS += $(DEFINES)
 

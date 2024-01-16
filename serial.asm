@@ -18,10 +18,17 @@ global serial_write_hex
 %define SERIAL_MODEM_STATUS 0x6
 %define SERIAL_SCRATCH 0x7
 
+%include "pcode.asm"
+
 %macro SERIAL_WRITE_REG 2
     mov dx, SERIAL_PORT + %0
     mov al, %1
     out dx, al
+    mov di, 0x100
+%%.loop:
+    dec di
+    cmp di, 0
+    jne %%.loop
 %endmacro
 
 %macro SERIAL_READ_REG 1
@@ -33,11 +40,13 @@ init_serial:
 %ifdef ENABLE_SERIAL
     push ax
     push dx
+    push di
     SERIAL_WRITE_REG SERIAL_LINE_CTRL, 0x80
     SERIAL_WRITE_REG SERIAL_DATA, 115200 / 115200
     SERIAL_WRITE_REG SERIAL_INT_ENABLE, 0x0
     SERIAL_WRITE_REG SERIAL_LINE_CTRL, 0x3
     SERIAL_WRITE_REG SERIAL_MODEM_CTRL, 0x3
+    pop di
     pop dx
     pop ax
 %endif

@@ -11,7 +11,7 @@ unsigned int probeRam(unsigned int start, unsigned int stride, int print_message
     unsigned int bytes_found = 0;
     unsigned int i = 0;
     for (i = start + stride - 4; i < end; i += stride) {
-        volatile int* test_point = (int*) i;
+        volatile unsigned int* test_point = (unsigned int*) i;
         int old_val = *test_point;
         *test_point = 0xAA55AA55;
         asm("wbinvd");
@@ -42,7 +42,7 @@ unsigned int testRam(unsigned int start, unsigned int end, int print_message) {
     unsigned int bytes = 0;
     unsigned int i = 0;
     for (i = start; i < start + end; i += 4) {
-        volatile int* test_point = (int*) i;
+        volatile unsigned int* test_point = (unsigned int*) i;
         int old_val = *test_point;
         *test_point = 0xAA55AA55;
         asm("wbinvd");
@@ -74,11 +74,11 @@ unsigned int testRam(unsigned int start, unsigned int end, int print_message) {
 unsigned int probeAll(unsigned int stride, unsigned int top, int print_message) {
     unsigned int total = 0;
     for (unsigned int i = 0; i < top; ) {
-        postCode(0x2);
-        unsigned int ram = probeRam(i, 1024, 1);
-        postCode(0x3);
+        unsigned int ram = probeRam(i, 1024, 0);
         if (ram > 0) {
-            printf("\nFound RAM region of size %d KB From 0x%x to 0x%x\n", ram / 1024, i, i + ram - 1);
+            if (print_message) {
+              printf("Found RAM region of size %d KB From 0x%x to 0x%x\n", ram / 1024, i, i + ram - 1);
+            }
             i += (ram - (ram % stride));
         }
         else {

@@ -15,5 +15,30 @@ typedef struct {
   word ax, bx, cx, dx, si;
 } real_mode_int_params;
 
+static void memcpy(void* dest, void* src, dword len) {
+  if ((len & 3) == 0) {
+    dword* d = (dword*)dest;
+    dword* s = (dword*)src;
+    while (len > 0) {
+      *d++ = *s++;
+      len -= 4;
+    }
+  } else if ((len & 2) == 0) {
+    word* d = (word*)dest;
+    word* s = (word*)src;
+    while (len > 0) {
+      *d++ = *s++;
+      len -= 2;
+    }
+  } else {
+    byte* d = (byte*)dest;
+    byte* s = (byte*)src;
+    while (len > 0) {
+      *d++ = *s++;
+      len--;
+    }
+  }
+}
+
 void real_mode_int(real_mode_int_params* params);
 #endif

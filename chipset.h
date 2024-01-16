@@ -1,6 +1,7 @@
 #ifndef CHIPSET_H
 #define CHIPSET_H
 #include "types.h"
+extern char CHIPSET_NAME[];
 void chipset_init();
 bool chipset_has_rom_shadowing();
 void chipset_shadow_rom(dword address, dword len);

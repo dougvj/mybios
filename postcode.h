@@ -2,7 +2,7 @@
 #define POSTCODE_H
 #include "io.h"
 
-static void inline postCode(char val) {
+inline static void postCode(char val) {
     outb(0x80, val);
 }
 

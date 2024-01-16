@@ -2,7 +2,7 @@ BITS 16
 ORG 0xFFF70
 %include "pcode.asm"
 protect:
-    push eax
+    xchg eax, ebx
     cli
     mov ax, 0xF000
     mov ds, ax
@@ -20,8 +20,7 @@ BITS 32
     mov gs, ax
     mov ss, ax
     PCODE 0x09
-    pop eax
-    jmp eax
+    jmp ebx
 gdt:
 dd 0x00000000, 0x00000000
 dd 0x0000ffff, 0x00Cf9a00

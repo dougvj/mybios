@@ -1,6 +1,6 @@
 BITS 16
 CPU 486
-%include "pcode.asm"
+%include "pcode.asm"ex
 extern wait_forever
 extern fill_dummy_ivt
 extern init_video
@@ -9,6 +9,7 @@ extern enter_protected_mode
 extern init_serial
 extern serial_write_hex
 extern serial_write_byte
+extern serial_write_string
 
 %macro WAIT 1
     push ax
@@ -39,7 +40,8 @@ WAIT 0xFFFF
 %endmacro
 
 SECTION .real_mode_text
-
+hello:
+db "Hello, world!", 0x0D, 0x0A, 0x00
 entry_point:
     PCODE 0x00
     cli
@@ -85,8 +87,8 @@ init_runtime_16:
     call fill_dummy_ivt
     PCODE 0x04
     call init_serial
-    ;int 0x10
-    int 0x80
+    mov esi, hello
+    call serial_write_string
     xchg bx, bx
     call init_video
     PCODE 0x08

@@ -50,7 +50,7 @@ void ataIdentify(unsigned char drv) {
     ataLBA(0);
     ataCommand(ATA_IDENTIFY);
     unsigned char status;
-    while (status = ataStatus()) {
+    while ((status = ataStatus())) {
         if (!(status & 0x80)) {
             break;
         }
@@ -61,7 +61,7 @@ void ataIdentify(unsigned char drv) {
         return;
     }
     printf(".");
-    while (status = ataStatus()) {
+    while ((status = ataStatus())) {
         if (status & 0x8) {
             break;
         }
@@ -90,7 +90,7 @@ void ataIdentify(unsigned char drv) {
         if (ident[53] & 0x1) {
             unsigned int blocks = ident[57] | (ident[58] << 16);
             unsigned int size_mb = (blocks * 512) / 1024 / 1024;
-            printf("CHS, %d MB\n");
+            printf("CHS, %d MB\n", size_mb);
         } else {
             printf("??? Older drive suspected\n");
         }

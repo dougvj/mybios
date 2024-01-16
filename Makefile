@@ -11,6 +11,12 @@ CFLAGS=-fno-stack-protector \
 			 -fno-builtin \
 			 -fno-asynchronous-unwind-tables \
 			 -fno-exceptions \
+			 -Wno-unused-parameter \
+			 -Wno-unused-function \
+			 -funsigned-char \
+			 -Wall \
+			 -Wextra \
+			 -Werror \
 			 -I./
 
 CC=gcc
@@ -60,6 +66,10 @@ bios.bin: bios.elf
 
 bios.elf: rom.ld $(C_OBJECTS) $(ASM_OBJECTS) backend_chipset.o
 	ld -T $^ -o bios.elf
+
+eprom-emu: bios.bin
+	eprom-emu-ng ./bios.bin /dev/ttyUSB0
+
 
 $(C_OBJECTS): %_c.o: %.c
 	$(CC) -c $^ $(CFLAGS) -o $@

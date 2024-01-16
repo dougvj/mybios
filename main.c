@@ -43,6 +43,7 @@ void cmos_write16(unsigned char addr, unsigned short value) {
 
 unsigned char cmos_read(unsigned char addr) {
   outb(0x70, addr);
+  delay();
   return inb(0x71);
 }
 
@@ -130,12 +131,6 @@ void fuzz_io_port(unsigned short index_port, unsigned short data_port, int resum
   printf("Done fuzzing I/O port -> 0x%X and <- 0x%x\n", index_port, data_port);
 }
 
-int pseudarand = 0x29c32a91;
-int rand() {
-    pseudarand = ((pseudarand>>1) ^ 0xf39e94be) ^ ((pseudarand & 1) << 31);
-    return pseudarand;
-}
-
 
 void mode13h_test() {
     // See if we can get into vga 13h mode
@@ -148,37 +143,46 @@ void mode13h_test() {
     for (int i = 0; i < 320 * 200; i++) {
         vram[i] = 0x0F;
     }
-    // Randomly write to video ram
-    //Randomly set the palette
-    for (int i = 0; i < 256; i++) {
-        outb(0x3C8, i);
-        outb(0x3C9, rand() % 0xFF);
-        outb(0x3C9, rand() % 0xFF);
-        outb(0x3C9, rand() % 0xFF);
-    }
+    unsigned int count = 0;
     while (1) {
         for (int i = 0; i < 320 * 200; i++) {
-            vram[i] = rand() & 0xFF;
+            count++;
+            vram[i] = (count>>24) ^ (count>>16) ^ (count>>8) ^ count;
         }
     }
     printf("VGA mode 13h enabled\n");
 }
+
+
 
 void print_io(int port) {
     printf("Port 0x%X: 0x%X\n", port, inb(port));
 }
 
 
+void detect_shadowing(int address) {
+    volatile unsigned int* check = (void*)address;
+    int orig = *check;
+    *check = 0x0;
+    if (*check == 0x0) {
+      printf("ROM shadowing at %x enabled\n", address);
+    } else {
+      printf("ROM shadowing at %x disabled\n", address);
+    }
+    *check = orig;
+}
+
 void main() {
     serial_init(115200);
     postCode(0x11);
-    initRuntime();
-    postCode(0x12);
-    vgaSetCursor(6, 0);
-    postCode(0x13);
-    printf("EklecTech BIOS %s. Doug Johnson (%s). C Code Entry Point\n", "Alpha", "2024");
-    postCode(0x14);
     chipset_init();
+    postCode(0x12);
+    initRuntime();
+    postCode(0x13);
+    vgaCls();
+    vgaSetCursor(0, 0);
+    printf("EklecTech BIOS %s. by Doug Johnson (%s) running backend %s\n", "v0.1apre", "2024", CHIPSET_NAME);
+    postCode(0x14);
     if (data_init_sentinel != 0xdeadc0de) {
         printf("Runtime init failed! Possibly low RAM condition\n");
     }
@@ -194,6 +198,14 @@ void main() {
     //chipset_explore();
     //fuzz_io_port(0x22, 0x23, 0);
     postCode(0x19);
+    //mode13h_test();
+    detect_shadowing(0xFFFF0000);
+    detect_shadowing(0xF0000);
+    detect_shadowing(0xC0000);
+    detect_shadowing(0xE0000);
+    detect_shadowing(0xD0000);
+    detect_shadowing(0xB0000);
+    mode13h_test();
     asm("hlt");
 }
 

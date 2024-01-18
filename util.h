@@ -11,7 +11,7 @@ typedef struct {
 void real_mode_call(real_mode_call_params* params);
 
 typedef struct {
-  byte interrupt;
+  byte int_num;
   word ax, bx, cx, dx, si;
 } real_mode_int_params;
 
@@ -38,6 +38,10 @@ static void memcpy(void* dest, void* src, dword len) {
       len--;
     }
   }
+}
+
+static void* shadowed_call(void* func) {
+  return func - 0xFFF00000;
 }
 
 void real_mode_int(real_mode_int_params* params);

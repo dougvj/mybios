@@ -3,7 +3,7 @@
 #include "post.h"
 #include "postcode.h"
 #include "util.h"
-
+#include "interrupts.h"
 const char CHIPSET_NAME[] = "UM82C480";
 
 #define DELAY 10
@@ -59,12 +59,21 @@ extern void beep();
 extern unsigned char cmos_read(unsigned char addr);
 extern void cmos_write(unsigned char addr, unsigned char value);
 
-// List of interesting bits:
-// 0x81 bit 2 crahes and somehow triggers a ton (random writes?),
-// 0x81 bit 6 crashes
-// 0x92 bit 7 crashes
-// 0x92 bit 0 corrupts RAM, possibly cache control? Sentinel didn't change
-// 0x9f seems to remap RAM, bios shadowing?
+// 0x81 Reset value 0x08
+// bit 0-2 crahes, 4, 5, do nothing, 6, 7 crash
+
+// 0x91 bit 0 crashes
+// 0x91 bit 1 abd 2 slightly lower memory performance
+// Maybe bus wait states, noticed performance of i/o space changed
+// 0x91 remaining seem to do nothing
+// 0x91 bit 0 causes VGA writes to be wrong for some reason, like no
+// characters are displayed but cursor updates
+//
+// 0x92 reset value is 0x10
+// 0x92 bit 0 corrupts RAM access but sentinel is still OK. Got a segment
+// not present fault at fff000103 for some reason
+// The rest of the bits seem to do nothing
+//
 // 0x9d shows more ram?
 // 0x9a bit 0 enables 16m ram, crashes
 // 0x9a bit 1 also 16 m?
@@ -87,81 +96,10 @@ extern void cmos_write(unsigned char addr, unsigned char value);
 // 0x9d bit 7 shadows 0xdc000-0xdffff
 // 0x9f bit 0, 1 corrupts ram probably by shifing it. Where to?
 
-volatile unsigned int sentinel = 0xceaddead;
-void toggle_all_bits(int reg, int mem_size) {
-  int i = reg;
-  int resume = cmos_read(0x16);
-  printf("Sentinel location: %x\n", &sentinel);
-  if (resume >= 0x8) {
-    resume = 0;
-  } else {
-    printf("Bit toggle failure reg %x bit %d\n", reg, resume);
-    resume++;
-  }
-  printf("%x\n", reg);
-  for (int j = resume; j < 8; j++) {
-    cmos_write(0x16, j);
-    printf("%d", j);
-    int toggle = 1 << j;
-    int byte = readReg2(i);
-    writeReg2(i, byte ^ toggle);
-    if (sentinel != 0xceaddead) {
-      printf(
-          "\nSentinel changed stack is probably corrupted. Searching for it\n");
-      for (int i = 0; i < 10; i++) {
-        beep();
-      }
-      char *mem = 0;
-      while (1) {
-        if (mem[0] == 0xad && mem[1] == 0xde && mem[2] == 0xad &&
-            mem[3] == 0xde) {
-          printf("Found sentinel at %x. Halting\n", mem);
-          break;
-        }
-        mem++;
-      }
-      asm("hlt");
-    }
-    int mem = probeAll(0x1000, 0x2000000, 0);
-    if (mem != mem_size) {
-      probeAll(0x1000, 0x2000000, 1);
-      printf("\nRam changed %dKB -> %dKB\n", mem / 1024, mem_size / 1024);
-      beep();
-    }
-    byte = readReg2(i);
-    writeReg2(i, byte ^ toggle);
-  }
-  cmos_write(0x16, 8);
-}
+#define WRITE_SERIAL(x)                                                        \
+  while(inb(0x3f8 + 5) & 0x20) {}                                               \
+  outb(0x3f8, x)
 
-void try_all_combos(int reg, int mem_size) {
-  int i = reg;
-  int resume = cmos_read(0x18);
-  printf("Sentinel location: %x\n", &sentinel);
-  if (resume == 0xFF || resume == 0) {
-    resume = 1;
-  } else {
-    printf("Failure on reg %x value %x\n", reg, resume);
-    resume++;
-  }
-  int value = readReg2(i);
-  printf("%x reads back %x\n", reg, value);
-  for (int j = resume; j <= 0x7; j++) {
-    cmos_write(0x18, j);
-    printf("%x\n", j);
-    writeReg2(i, j);
-    if (sentinel != 0xceaddead) {
-      // We have no stack! undo
-      writeReg2(i, j - 1);
-    }
-    int mem = probeAll(0x400, 0x2000000, 1);
-    if (mem != mem_size) {
-      printf("\nRam changed %dKB -> %dKB\n", mem / 1024, mem_size / 1024);
-      beep();
-    }
-  }
-  cmos_write(0x18, 0);
-}
 
 void dump_regs() {
   for (int i = 0; i < 0x100; i++) {
@@ -177,26 +115,6 @@ void reset_resume() {
   cmos_write(0x14, 0);
   cmos_write(0x16, 0);
   cmos_write(0x18, 0);
-}
-
-void toggle_all(int mem_count) {
-  int *mem = (void *)0xF0000;
-  int resume = cmos_read(0x14);
-  if (resume == 0xFF) {
-    resume = 0;
-  } else {
-    printf("Resuming from 0x%x\n", resume);
-  }
-  for (int i = resume; i < 0x100; i++) {
-    int byte = readReg2(i);
-    if (byte != 0xff) {
-      printf("Found reg at 0x%x (via reg 24): %x\n", i, byte);
-      cmos_write(0x14, i);
-      toggle_all_bits(i, mem_count);
-    }
-    //}
-  }
-  reset_resume();
 }
 
 void chipset_init() {
@@ -239,7 +157,151 @@ void chipset_init() {
   memcpy((void *)0x60000, (void *)0xf0000, 0x10000);
   writeReg2(0x9b, 0x02); // Shadow 0xf0000
   memcpy((void *)0xf0000, (void *)0x60000, 0x10000);
+  // Enable cache
+  int cr0;
+  asm("mov %%cr0, %0" : "=r"(cr0));
+  printf("CR0: %x\n", cr0);
+  // Enable internal cache
+  cr0 &= ~0x60000000;
+  // Flush cache
+  asm("wbinvd");
+  asm("mov %0, %%cr0" : : "r"(cr0));
+  printf("CR0: %x\n", cr0);
+  // Now not sure what this does but seems to increase performance:
+  //
+  //writeReg2(0x91, 0xAA);// Enable cache?
+  asm("wbinvd");
 
+}
+
+int detect_shadowing(int address, int msg);
+
+inline static void set_beep_freq(int freq) {
+  outb(0x43, 0xb6);
+  int divisor = 1193180 / freq;
+  outb(0x42, divisor & 0xff);
+  outb(0x42, divisor >> 8);
+}
+
+#define abs(x) ((x) < 0 ? -(x) : (x))
+
+unsigned int sentinel = 0xceaddead;
+
+// Assumes shadowing
+void chipset_explore() {
+  // Read initial values
+  int regs[0xFF];
+  int regs2[0xFF];
+  for(int i = 0; i < 0xFF; i++) {
+    regs[i] = readReg(i);
+    regs2[i] = readReg2(i);
+  }
+  int (*probeSpeedLower)() = shadowed_call(probeSpeed);
+  int (*probeMemSpeedLower)() = shadowed_call(probeMemSpeed);
+  // OK let's try to toggle different bits and see if our performanc changes.
+  //
+  // This assumes already that we have dram configured and shadowing enabled
+
+  int i = 0x70;
+  int resume = 0xff;
+  int toggle_mode = 1;
+  //int resume = cmos_read(0x16);
+  printf("Sentinel location: %x\n", &sentinel);
+  int orig_speed = probeSpeedLower();
+  printf("Orig Speed: %d\n", orig_speed);
+  int mem_speed = probeMemSpeedLower();
+  printf("Orig Mem Speed: %d\n", mem_speed);
+  // Frequencies of major scale
+  int freq_scale[] = {
+      130, 146, 164, 174, 196, 220, 246, 261
+  };
+  if (resume >= 0xFF) {
+    resume = 0;
+  } else {
+    printf("Failure reg %x val %d\n", i, resume);
+    resume++;
+  }
+  printf("%x: %x\n", i, readReg2(i));
+  for (int j = resume; j <= 0xFF; j++) {
+    interrupts_watchdog_reset();
+    if (toggle_mode && j > 0x7) {
+      break;
+    }
+    //cmos_write(0x16, j);
+    set_beep_freq(freq_scale[j&0x7] * 2);
+    // Enable beep
+    outb(0x61, inb(0x61) | 3);
+    int byte = readReg2(i);
+    int new_byte;
+    if (toggle_mode) {
+      int toggle = 1 << j;
+      new_byte = byte ^ toggle;
+    } else {
+      new_byte = j;
+    }
+    printf("%d: %x\n", j, new_byte);
+    // Flush cache just in case
+    asm("wbinvd");
+    writeReg2(i, new_byte);
+    // Disable beep
+    if (sentinel != 0xceaddead) {
+      printf("Sentinel corrupted: %x\n", sentinel);
+      //outb(0x61, inb(0x61) & ~3);
+      char *mem = (char*)0x1000;
+      while (1) {
+        // enable beep
+        set_beep_freq(((int)mem >> 20) + 100);
+        outb(0x61, inb(0x61) | 3);
+        if (mem[0] == 0xad && mem[1] == 0xde && mem[2] == 0xad &&
+            mem[3] == 0xde) {
+          // brief beep
+          outb(0x61, inb(0x61) | 3);
+          for (int i = 0; i < 100000; i++) {
+            asm("nop");
+          }
+          break;
+        }
+        outb(0x61, inb(0x61) & ~3);
+        mem +=4;
+      }
+      writeReg2(i, byte);
+      printf("Found sentinel at %x which is a shift of %d\n", mem, mem - (char*)sentinel);
+    } else {
+      int new_speed = probeSpeedLower();
+      printf("New speed: %d\n", new_speed);
+      if (abs(new_speed - orig_speed) > 100) {
+        printf("Bit %d is a performance change of %i\n", j, abs(new_speed - orig_speed));
+      }
+      int new_mem_speed = probeMemSpeed();
+      printf("New mem speed: %d\n", new_mem_speed);
+      if (abs(new_mem_speed - mem_speed) > 100) {
+        printf("Bit %d is a mem performance change of %i\n", j, abs(new_mem_speed - mem_speed));
+      }
+      if (detect_shadowing(0xFFF00000, 0)) {
+        printf("Bit %d is a shadowing change in upper ROM region\n", j);
+      }
+      // Probe all registers for changes
+      for(int i = 0; i < 0xFF; i++) {
+        int byte = readReg(i);
+        if (byte != regs[i]) {
+          printf("Found reg(23) %x changed from %x to %x\n", i, regs[i], byte);
+          // regs[i] = byte;
+        }
+        byte = readReg2(i);
+        if (byte != regs2[i]) {
+          printf("Found reg(24) %x changed from %x to %x\n", i, regs2[i], byte);
+          // regs2[i] = byte;
+        }
+      }
+      outb(0x61, inb(0x61) & ~3);
+      writeReg2(i, byte);
+    }
+  }
+  /*for(;;) {
+    //outb(0x61, inb(0x61) & ~3);
+    int speed = probeMemSpeed();
+    printf("Speed: %d\r", speed);
+  }*/
 }
 
 bool chipset_has_rom_shadowing() { return false; }

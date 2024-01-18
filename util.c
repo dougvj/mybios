@@ -62,10 +62,10 @@ void real_mode_int(real_mode_int_params* params) {
       call_real_mode_asm()
       :
       "=m"(params->ax), "=m"(params->bx), "=m"(params->cx), "=m"(params->dx),
-      "=m"(params->si), "=m"(params->interrupt)
+      "=m"(params->si), "=m"(params->int_num)
       :
       "m"(params->ax), "m"(params->bx), "m"(params->cx), "m"(params->dx),
-      "m"(params->si), "m"(params->interrupt),
+      "m"(params->si), "m"(params->int_num),
       "m"(segment), "m"(offset)
       : "ebx", "ecx", "edx", "esi", "edi"
       );

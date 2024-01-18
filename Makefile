@@ -7,6 +7,7 @@ CFLAGS=-fno-stack-protector \
 			 -nostdlib \
 			 -m32 \
 			 -march=i386\
+			 -mgeneral-regs-only \
 			 -ffreestanding \
 			 -fno-builtin \
 			 -fno-asynchronous-unwind-tables \

@@ -8,9 +8,9 @@ void putc(char c)
 {
     vgaPutChar(c);
 #ifdef ENABLE_SERIAL
-    if (c == '\n') {
+    /*if (c == '\n') {
         serial_write('\r');
-    }
+    }*/
     serial_write(c);
 #endif
     // This is a bochs thing?

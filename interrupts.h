@@ -51,4 +51,5 @@ typedef unsigned int(*timer_callback)(unsigned int ticks);
 int interrupts_register_timer_callback(timer_callback callback, unsigned int ticks);
 int interrupts_unregister_timer_callback(int id);
 bool interrupts_enabled(void);
+void interrupts_reload_idt(void);
 #endif // __INTERRUPTS_H__

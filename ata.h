@@ -3,6 +3,7 @@
 
 
 void ataInit();
+unsigned int ataGetDriveSize(int drive);
 int numDrives();
 int ataRead(int drive, int sector, int count, char* buffer);
 #endif

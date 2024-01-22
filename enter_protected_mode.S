@@ -2,7 +2,7 @@ BITS 16
 ORG 0xFFF70
 %include "pcode.asm"
 protect:
-    xchg eax, ebx
+    push eax
     cli
     mov ax, 0xF000
     mov ds, ax
@@ -13,6 +13,13 @@ protect:
     jmp dword 0x0008:._32main
 BITS 32
 ._32main:
+    ;Set up the stack to be the same as real mode
+    mov eax, ss
+    shl eax, 4
+    and esp, 0x0000FFFF
+    and ebp, 0x0000FFFF
+    add esp, eax
+    add ebp, eax
     mov ax, 0x10
     mov ds, ax
     mov es, ax
@@ -20,7 +27,8 @@ BITS 32
     mov gs, ax
     mov ss, ax
     PCODE 0x09
-    jmp ebx
+    pop eax
+    jmp eax
 gdt:
 dd 0x00000000, 0x00000000
 dd 0x0000ffff, 0x00Cf9a00

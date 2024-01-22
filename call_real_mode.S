@@ -1,5 +1,5 @@
 BITS 32
-ORG 0xFFF20
+ORG 0xFFF00
 real_mode_call:
     cli
     ; eax has the real mode segment, save it
@@ -16,10 +16,14 @@ BITS 16
     mov ss, ax
     jmp dword 0xF000:(._16call - 0xF0000)
 ._16call:
+    push ds
+    mov ax, 0xF000
+    mov ds, ax
+    lidt [_idt]
+    pop ds
     pop eax
     push bp
     mov bp, sp
-    xchg bx, bx
     call far [ss:bp+6]
     pop bp
     ; Renenter protected mode at ret
@@ -30,3 +34,6 @@ ret:
 BITS 32
     pop eax
     ret
+_idt:
+    dw 0x3FF, 0x0
+    dd 0x0

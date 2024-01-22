@@ -129,44 +129,12 @@ int detect_shadowing(int address, int msg) {
 
 void chipset_explore();
 
-void bootstrap_from_hd() {
-  char MBR[512];
-  if (ataRead(0, 0, 1, MBR) != 512) {
-    printf("Failed to read MBR\n");
-    return;
-  }
-  // Parse MBR
-  int partition_offsets[4];
-  int partition_sizes[4];
-  char partition_types[4];
-  for (int i = 0; i < 4; i++) {
-    partition_offsets[i] = *(int *)(MBR + 0x1BE + i * 16 + 8);
-    partition_sizes[i] = *(int *)(MBR + 0x1BE + i * 16 + 12);
-    partition_types[i] = *(char *)(MBR + 0x1BE + i * 16 + 4);
-  }
-  int bootstrap_partition = -1;
-  for (int i = 0; i < 4; i++) {
-    if (partition_sizes[i] == 0) {
-      continue;
-    }
-    printf("Partition %d: Offset 0x%X, Size 0x%X, Type 0x%X\n", i,
-           partition_offsets[i], partition_sizes[i], partition_types[i]);
-    if (partition_types[i] == 0x68) {
-      bootstrap_partition = i;
-    }
-  }
-  if (bootstrap_partition < 0) {
-    printf("No bootstrap partition found\n");
-    return;
-  }
-  int bootstrap_offset = partition_offsets[bootstrap_partition];
-  int bootstrap_size = partition_sizes[bootstrap_partition];
-  printf("Bootstrap partition %d found at offset 0x%X, size 0x%X\n",
-         bootstrap_partition, bootstrap_offset, bootstrap_size);
+// TODO I think this is clobbering ram
+void handover_from_hd(int offset) {
   printf("Loading to 0x80000 with soft handover to shadow rom at 0xF0000...\n");
   int read_sectors = 65536 / 512;
   char *buffer = (char *)0x80000;
-  if (ataRead(0, bootstrap_offset, read_sectors, buffer) != 65536) {
+  if (ataRead(0, offset, read_sectors, buffer) != 65536) {
     printf("Failed to read bootstrap\n");
     return;
   }
@@ -206,6 +174,58 @@ void bootstrap_from_hd() {
   };
   real_mode_call(&params);
   printf("Soft handover failed");
+}
+
+int find_bootstrap_partition(char* MBR) {
+  // Parse MBR
+  int partition_offsets[4];
+  int partition_sizes[4];
+  char partition_types[4];
+  for (int i = 0; i < 4; i++) {
+    partition_offsets[i] = *(int *)(MBR + 0x1BE + i * 16 + 8);
+    partition_sizes[i] = *(int *)(MBR + 0x1BE + i * 16 + 12);
+    partition_types[i] = *(char *)(MBR + 0x1BE + i * 16 + 4);
+  }
+  int bootstrap_partition = -1;
+  for (int i = 0; i < 4; i++) {
+    if (partition_sizes[i] == 0) {
+      continue;
+    }
+    printf("Partition %d: Offset 0x%X, Size 0x%X, Type 0x%X\n", i,
+           partition_offsets[i], partition_sizes[i], partition_types[i]);
+    if (partition_types[i] == 0x68) {
+      bootstrap_partition = i;
+    }
+  }
+  if (bootstrap_partition < 0) {
+    printf("No bootstrap partition found\n");
+    return -1;
+  }
+  return partition_offsets[bootstrap_partition];
+}
+
+bool boot_from_hd() {
+  char* bootsector = (char*)0x7C00;
+  if (ataRead(0, 0, 1, bootsector) != 512) {
+    printf("Failed to read MBR\n");
+    return false;
+  }
+  // Look for bootsector signature
+  if (bootsector[510] != 0x55 || bootsector[511] != 0xAA) {
+    printf("Invalid MBR signature\n");
+    return false;
+  }
+  vgaCls();
+  set_vga_enabled(0);
+  // Call real mode routine to jump into bootsector
+  real_mode_call_params params = {
+      .segment = 0x0,
+      .offset = 0x7C00,
+      .dx = 0x0080,
+  };
+  real_mode_call(&params);
+  printf("Boot from HD failed\n");
+  return false;
 }
 
 bool oprom_exists(unsigned char *oprom) {
@@ -260,15 +280,17 @@ void main() {
 #ifdef ENABLE_SERIAL
   bool serial_enabled = serial_init(115200);
 #endif
-  /*if (oprom_valid((unsigned char *)0xC0000)) {
+  if (oprom_valid((unsigned char *)0xC0000)) {
     printf("Found VGA BIOS, Calling\n");
     call_oprom((unsigned char *)0xC0000);
+    set_vga_enabled(1);
+    postCode(0x13);
+    vgaCls();
   } else {
     printf("Could not find VGA BIOS\n");
-  }*/
+    set_vga_enabled(0);
+  }
   chipset_post();
-  postCode(0x13);
-  vgaCls();
   vgaSetCursor(0, 0);
   printf("EklecTech BIOS %s. by Doug Johnson (%s) running backend %s\n",
          "v0.1apre", "2024", CHIPSET_NAME);
@@ -294,8 +316,8 @@ void main() {
   pci_configure();
 #endif
   postCode(0x17);
-  //interrupts_init();
-  //serial_set_buffered(1);
+  interrupts_init();
+  serial_set_buffered(1);
   postCode(0x18);
   ataInit();
   // probe_io_ports();
@@ -303,10 +325,10 @@ void main() {
   // chipset_explore();
   // fuzz_io_port(0x22, 0x23, 0);
   postCode(0x19);
-  //interrupts_enable();
+  interrupts_enable();
   // mode13h_test();
   detect_shadowing(0xFFFF0000, 1);
-  bool rom_region_writable =
+  bool __attribute__((unused)) rom_region_writable =
     detect_shadowing(0xF0000, 1);
   detect_shadowing(0xC0000, 1);
   detect_shadowing(0xE0000, 1);
@@ -320,11 +342,12 @@ void main() {
   // interrupts_enable();*/
   // chipset_explore_lower_addr();
   printf("Done\n");
-  if (rom_region_writable) {
-    //interrupts_disable();
-    bootstrap_from_hd();
-  } else {
-    printf("ROM region not writable, skipping bootstrap\n");
+  bool success = boot_from_hd();
+  if (!success) {
+    printf("Failed to boot from HD\n");
+  }
+  while (1) {
+    asm("hlt");
   }
   // If we are here we failed to bootstrap from HD
   interrupts_disable();

@@ -4,9 +4,12 @@
 #include "serial.h"
 #include "types.h"
 #include "interrupts.h"
+
+static bool vga_enabled = false;
 void putc(char c)
 {
-    vgaPutChar(c);
+    if (vga_enabled)
+      vgaPutChar(c);
 #ifdef ENABLE_SERIAL
     /*if (c == '\n') {
         serial_write('\r');
@@ -25,6 +28,10 @@ void putc(char c)
 #ifdef BOCHS
     outb(0xE9, c);
 #endif
+}
+
+void set_vga_enabled(bool enabled) {
+    vga_enabled = enabled;
 }
 
 void itoa(dword value, char* buf, int base) {

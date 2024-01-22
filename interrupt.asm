@@ -5,9 +5,12 @@ default REL
 global fill_dummy_ivt
 global install_ivt
 
+%include "pcode.asm"
+
 extern serial_write_string
 extern serial_write_byte
 extern serial_write_hex
+extern interrupts_real_mode_interrupt
 
 fill_dummy_ivt:
     xor bx, bx
@@ -29,13 +32,12 @@ endl:
 
 print_handler:
     push ds
-    xchg ax, bx
     mov ax, 0xF000
     mov ds, ax
-    xchg ax, bx
     push esi
     mov esi, msg
     call serial_write_string
+    mov eax, ebx
     call serial_write_hex
     mov esi, endl
     call serial_write_string
@@ -46,11 +48,63 @@ print_handler:
     mov ax, 0x4321
     iret
 
+trampoline_to_32:
+    mov al, bl
+    out 0x80, al
+    mov eax, ret
+    jmp 0xF000:0xFF70
+ret:
+BITS 32
+    call interrupts_real_mode_interrupt
+    xchg bx, bx
+    pop bx ; throw away the interrupt number
+    xor ecx, ecx
+    pop cx ; this will be the new ss
+    xor ebx, ebx
+    pop bx ; this will be the new sp
+    jmp dword 0x18:._16_prot
+BITS 16
+._16_prot:
+    mov eax, cr0
+    and eax, 0xFFFFFFFE
+    mov cr0, eax
+    mov ax, 0x00
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    jmp dword 0xF000:(.iret - 0xF0000)
+.iret:
+    ; Restore the stack then restore the registers
+    mov esp, ebx ; for some asinine reason, the high word of esp is used
+    mov ss, cx
+    pop es
+    pop ds
+    pop bp
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    iret
+
 %macro interrupt_handler 1
 int%1:
-    push eax
-    mov eax, %1
-    jmp word print_handler
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push bp
+    push ds
+    push es
+    push sp
+    push ss
+    mov bx, %1
+    push bx
+    xchg bx, bx
+    jmp word trampoline_to_32
 %endmacro
 
 

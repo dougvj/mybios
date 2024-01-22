@@ -10,7 +10,7 @@ ENTRY("reset_vector")
 MEMORY
 {
     RAM (rw) : ORIGIN = 0x90000, LENGTH = 64K
-    RAM32 (rw) : ORIGIN = 0x70000, LENGTH = 64k
+    RAM32 (rw) : ORIGIN = 0x100000, LENGTH = 64k
     LOWER_ROM (rx) : ORIGIN = 0xF0000, LENGTH = 64K
     UPPER_ROM (rx) : ORIGIN = ROM_START, LENGTH = ROM_SIZE
 }
@@ -37,7 +37,7 @@ SECTIONS
     .real_mode_text REAL_MODE_TEXT_LOCATION - 0xFFF00000 : AT(REAL_MODE_TEXT_LOCATION)  {
         *(.real_mode_text*);
     }
-    .call_real_mode 0xFFF20 : AT(0xFFFFFF20)  {
+    .call_real_mode 0xFFF00 : AT(0xFFFFFF00)  {
         call_real_mode = .;
         *(.call_real_mode*);
     }

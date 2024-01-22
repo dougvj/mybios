@@ -21,6 +21,10 @@ typedef struct drive_info {
 int num_drives;
 drive_info_t drives[4];
 
+unsigned int ataGetDriveSize(int drive) {
+    return drives[drive].blocks;
+}
+
 unsigned short ataReadData() {
     return inw(_base_port + 0);
 }

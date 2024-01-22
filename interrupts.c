@@ -1,6 +1,7 @@
 #include "interrupts.h"
 #include "stdio.h"
 #include "io.h"
+#include "ata.h"
 
 typedef struct {
   uint16 offset_low;
@@ -751,12 +752,14 @@ void interrupts_watchdog_reset(void) {
   watchdog_counter = 0;
 }
 
-void interrupts_init(void) {
-  // Set up the IDT pointer:
+void interrupts_reload_idt(void) {
   idt_ptr_t idt_ptr;
   idt_ptr.limit = sizeof(idt_entry_t) * 256 - 1;
   idt_ptr.base = (uint32)&idt;
+  asm volatile("lidt %0" : : "m"(idt_ptr));
+}
 
+void interrupts_init(void) {
   for (int i = 0; i < 256; i++) {
     interrupts_set_interrupt_handler(i, default_interrupt_handlers[i]);
   }
@@ -800,7 +803,7 @@ void interrupts_init(void) {
   outb(0xA1, 0x01);
   outb(0x21, 0xFF); // mask all until enabled
   outb(0xA1, 0xFF);
-  asm volatile("lidt %0" : : "m"(idt_ptr));
+  interrupts_reload_idt();
   printf("Interrupts initialized\n");
 }
 
@@ -877,4 +880,137 @@ bool interrupts_enabled() {
                "pop %0"
                : "=g"(flags));
   return flags & (1 << 9);
+}
+
+typedef struct real_mode_stack_frame {
+  uint16 interrupt_vector;
+  uint16 ss;
+  uint16 sp;
+  uint16 es;
+  uint16 ds;
+  uint16 bp;
+  uint16 di;
+  uint16 si;
+  uint16 dx;
+  uint16 cx;
+  uint16 bx;
+  uint16 ax;
+  uint16 ip;
+  uint16 cs;
+  uint16 flags;
+} __attribute__((packed)) real_mode_stack_frame_t;
+
+#define GET_L(x) ((x) & 0xFF)
+#define GET_H(x) (((x) >> 8) & 0xFF)
+#define SET_L(x, v) ((x) = ((x) & 0xFF00) | ((v) & 0xFF))
+#define SET_H(x, v) ((x) = ((x) & 0xFF) | (((v) & 0xFF) << 8))
+#define SET_LH(x, l, h) ((x) = (((h) & 0xFF) << 8) | ((l) & 0xFF))
+
+void interrupts_real_mode_interrupt(void) {
+  unsigned char* _frame;
+  asm volatile("mov %%ebp, %0" : "=g"(_frame));
+  _frame += 8; // advance by 8 to account for EIP and EBP pushed on the stack
+  real_mode_stack_frame_t* frame = (real_mode_stack_frame_t*)(_frame);
+  printf("Got real mode interrupt %x\n", frame->interrupt_vector);
+  printf("ip: %x\n", frame->ip);
+  printf("cs: %x\n", frame->cs);
+  printf("flags: %x\n", frame->flags);
+  printf("ax: %x\n", frame->ax);
+  printf("bx: %x\n", frame->bx);
+  printf("cx: %x\n", frame->cx);
+  printf("dx: %x\n", frame->dx);
+  printf("si: %x\n", frame->si);
+  printf("di: %x\n", frame->di);
+  printf("bp: %x\n", frame->bp);
+  printf("ds: %x\n", frame->ds);
+  printf("es: %x\n", frame->es);
+  printf("ss: %x\n", frame->ss);
+  printf("sp: %x\n", frame->sp);
+  switch (frame->interrupt_vector) {
+    case 0x6:
+      printf("Got invalid opcode\n");
+      while (1) {
+        asm volatile("hlt");
+      }
+      break;
+    case 0x10:
+      printf("Got video interrupt\n");
+      break;
+    case 0x13:
+      printf("Got disk interrupt\n");
+      switch(frame->ax >> 8) {
+        case 0x8: {
+          int drive = GET_L(frame->dx);
+          printf("Got get disk parameters for %x \n", drive);
+          unsigned int block_count = ataGetDriveSize(drive & 0x7F);
+          unsigned char sectors_per_track = 63;
+          unsigned char heads = 16;
+          unsigned int cylinders = block_count / (sectors_per_track * heads);
+          SET_H(frame->ax, 0x00);
+          SET_H(frame->cx, cylinders & 0xFF);
+          SET_L(frame->cx, sectors_per_track | ((cylinders >> 8) & 0x3) << 5);
+          SET_H(frame->dx, heads);
+          SET_L(frame->dx, 1);
+          frame->flags &= 0xFFFE;
+        } break;
+        case 0x2:
+          printf("Got read disk sectors\n");
+          int num_sectors = GET_L(frame->ax);
+          int cylinder = GET_H(frame->cx) | ((GET_L(frame->cx) & 0xC0) << 2);
+          int head = GET_H(frame->dx);
+          int sector = GET_L(frame->cx) & 0x3F;
+          int drive = GET_L(frame->dx);
+          printf("Reading %d sectors from drive %d, cylinder %d, head %d, sector %d\n", num_sectors, drive, cylinder, head, sector);
+          char* dest = (char*)((frame->es <<4) + frame->bx);
+          unsigned int lba = (cylinder * 16 + head) * 63 + sector - 1;
+          printf("LBA: %d\n", lba);
+          printf("dest: 0x%x\n", dest);
+          ataRead(drive & 0x7F, lba, num_sectors, dest);
+          // clear carry flag
+          frame->flags &= 0xFFFE;
+          SET_L(frame->ax, num_sectors);
+          break;
+        case 0x0:
+          printf("Got reset disk system\n");
+          // Just assume it worked
+          frame->flags &= 0xFFFE;
+          SET_L(frame->ax, 0x00);
+          break;
+        default:
+          printf("Got unknown disk interrupt\n");
+          SET_L(frame->ax, 0x01);
+          frame->flags |= 0x1;
+          break;
+      }
+      break;
+    case 0x16:
+      printf("Got keyboard interrupt\n");
+      switch(GET_H(frame->ax)) {
+        case 0x1:
+        case 0x11:
+          printf("Got keyboard check\n");
+          // Set zero flag
+          frame->flags |= 0x40;
+          frame->ax = 0x00;
+          break;
+        case 0x2:
+          printf("Get shift flags\n");
+          SET_L(frame->ax, 0x01);
+          break;
+        default:
+          printf("Unhandled %x\n", GET_H(frame->ax));
+          while (1) {
+            asm volatile("hlt");
+          }
+          break;
+      }
+      break;
+    case 0x12:
+      printf("Got memory size interrupt\n");
+      frame->ax = 512;
+      break;
+    default:
+      printf("Got unknown interrupt\n");
+      break;
+  }
 }

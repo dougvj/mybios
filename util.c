@@ -1,5 +1,6 @@
 #include "chipset.h"
 #include "util.h"
+#include "interrupts.h"
 #include "debug.h"
 #include "output.h"
 
@@ -49,6 +50,7 @@ void real_mode_call(real_mode_call_params* params)
       "m"(params->segment), "m"(params->offset)
       : "ebx", "ecx", "edx", "esi", "edi"
       );
+  interrupts_reload_idt();
 }
 
 extern void call_int();
@@ -71,4 +73,5 @@ void real_mode_int(real_mode_int_params* params) {
       "m"(segment), "m"(offset)
       : "ebx", "ecx", "edx", "esi", "edi"
       );
+  interrupts_reload_idt();
 }

@@ -10,7 +10,7 @@ BITS 16
     mov eax, cr0
     and eax, 0xFFFFFFFE
     mov cr0, eax
-    mov ax, 0x0
+    mov ax, 0x00
     mov ds, ax
     mov es, ax
     mov ss, ax
@@ -19,6 +19,7 @@ BITS 16
     pop eax
     push bp
     mov bp, sp
+    xchg bx, bx
     call far [ss:bp+6]
     pop bp
     ; Renenter protected mode at ret

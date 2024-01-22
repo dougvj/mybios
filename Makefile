@@ -1,7 +1,7 @@
 
 
 CFLAGS=-fno-stack-protector \
-			 -std=gnu99 \
+			 -std=gnu2x \
 			 -Os \
 			 -fno-pic \
 			 -nostdlib \
@@ -38,6 +38,8 @@ all: bios.bin
 DEFINES=
 #DEFINES += -DBOCHS
 DEFINES += -DENABLE_SERIAL
+#DEFINES += -DENABLE_EARLY_SERIAL
+#DEFINES += -DENABLE_EARLY_VIDEO
 CFLAGS += $(DEFINES)
 ASMFLAGS += $(DEFINES)
 

@@ -20,7 +20,6 @@ typedef signed long long int64;
 typedef unsigned char uchar;
 typedef unsigned short ushort;
 typedef unsigned long ulong;
-typedef _Bool bool;
 #define true 1
 #define false 0
 

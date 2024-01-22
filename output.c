@@ -3,7 +3,7 @@
 #include "io.h"
 #include "serial.h"
 #include "types.h"
-
+#include "interrupts.h"
 void putc(char c)
 {
     vgaPutChar(c);
@@ -11,11 +11,19 @@ void putc(char c)
     /*if (c == '\n') {
         serial_write('\r');
     }*/
-    serial_write(c);
+    if (serial_enabled()) {
+      // We only want to use the buffered serial port if interrupts are enabled
+      if (interrupts_enabled()) {
+          serial_write(c);
+      }
+      else {
+          serial_write_unbuffered(c);
+      }
+    }
 #endif
     // This is a bochs thing?
 #ifdef BOCHS
-    outb(0x402, c);
+    outb(0xE9, c);
 #endif
 }
 

@@ -1,35 +1,38 @@
+#include "interrupts.h"
 #include "io.h"
 #include "output.h"
 #include "post.h"
 #include "postcode.h"
 #include "util.h"
-#include "interrupts.h"
 const char CHIPSET_NAME[] = "UM82C480";
 
 #define DELAY 10
 
 static void small_delay() { asm("nop"); }
 
-static void writeReg(char reg, char byte) {
+// This writes to the UM82C206. There is only one register which controls the
+// wait states of accessing the PIC, PIT, etc which this chip implements
+// BREAKTHROUGH: This chip is the same as the Opti 82C206
+static void writeReg206(char reg, char byte) {
   outb(0x22, reg);
   small_delay();
   outb(0x23, byte);
 }
 
-static void writeReg2(char reg, char byte) {
+static void writeReg480(char reg, char byte) {
   outb(0x22, reg);
   small_delay();
   outb(0x24, byte);
 }
 
-static char readReg(char reg) {
+static char readReg206(char reg) {
   outb(0x22, reg);
   small_delay();
   char d = inb(0x23);
   return d;
 }
 
-static char readReg2(char reg) {
+static char readReg480(char reg) {
   outb(0x22, reg);
   small_delay();
   return inb(0x24);
@@ -59,13 +62,31 @@ extern void beep();
 extern unsigned char cmos_read(unsigned char addr);
 extern void cmos_write(unsigned char addr, unsigned char value);
 
+// Here are the known registers
+// 0x80 Reset value 0x02, seems to be read only
+// 0x81 Reset value 0x08
+// 0x82 Reset value 0x00
+// 0x91 Reset value 0xA8 bits 1-3 seem to affect memory performance, but fastest 0xE0 is unstable, crashes after a minutes or so
+// 0x92 Reset value 0x10 Upper bits seem to affect memory performance, reset value is fastest. Bit 5 seems to be fixed
+// 0x93 Reset value 0x00
+// 0x94 Reset value 0xC0
+// 0x95 Reset value 0x00
+// 0x96 Reset value 0x00
+// 0x97 Reset value 0x30
+// 0x98 Reset value 0x00
+// 0x99 Reset value 0x00
+// 0x9A Reset value 0x01 (Known to be RAM size on bottom 4 bits)
+// 0x9B Reset value 0x00 (BIOS shadowing on bit 1
+// 0x9C Reset value 0x00
+// 0x9D Reset value 0x41 (Fined grained shadowing from 0xc0000 to 0xdffff)
+
 // 0x81 Reset value 0x08
 // bit 0-2 crahes, 4, 5, do nothing, 6, 7 crash
 
-// 0x91 bit 0 crashes
-// 0x91 bit 1 abd 2 slightly lower memory performance
-// Maybe bus wait states, noticed performance of i/o space changed
-// 0x91 remaining seem to do nothing
+// 0x91 bit 0 crashes. Fast reset?
+// 0x91 bits, 1, 2, 3 affect memory performance. Bus access? Seems like 0xE0000
+//                   is the fastest
+// 0x91 remaining seem to do nothing and reset to 0xA0
 // 0x91 bit 0 causes VGA writes to be wrong for some reason, like no
 // characters are displayed but cursor updates
 //
@@ -94,16 +115,17 @@ extern void cmos_write(unsigned char addr, unsigned char value);
 // 0x9d bit 5 shadows 0xd4000-0xd7fff
 // 0x9d bit 6 shadows 0xd8000-0xdbfff
 // 0x9d bit 7 shadows 0xdc000-0xdffff
-// 0x9f bit 0, 1 corrupts ram probably by shifing it. Where to?
+// 0x9f bit 0, 1 corrupts ram probably by shifing it. Where to? I think this is
+// the remap register
 
 #define WRITE_SERIAL(x)                                                        \
-  while(inb(0x3f8 + 5) & 0x20) {}                                               \
+  while (inb(0x3f8 + 5) & 0x20) {                                              \
+  }                                                                            \
   outb(0x3f8, x)
-
 
 void dump_regs() {
   for (int i = 0; i < 0x100; i++) {
-    int byte = readReg2(i);
+    int byte = readReg480(i);
     if (byte != 0xff) {
       printf("Found reg at 0x%x (via reg 24): %x\n", i, byte);
     }
@@ -132,13 +154,13 @@ void chipset_init() {
   register char best_config = 1;
   register int best_mem_count = 0;
   for (register char config = 0; config < 0x10; config++) {
-    writeReg2(0x9a, config);
+    writeReg480(0x9a, config);
     postCode(config);
     // Write to 0x400 to make sure we can read back what we wrote
     volatile unsigned char *test = (void *)0x1000;
     *test = 0x55;
     if (*test != 0x55) {
-      writeReg2(0x9a, best_config);
+      writeReg480(0x9a, best_config);
       continue;
     }
     int mem = probeRam(0x100000, 0x1000, 0);
@@ -153,28 +175,79 @@ void chipset_init() {
     }
   }
 
-  writeReg2(0x9a, best_config);
+  writeReg480(0x9a, best_config);
   memcpy((void *)0x60000, (void *)0xf0000, 0x10000);
-  writeReg2(0x9b, 0x02); // Shadow 0xf0000
+  writeReg480(0x9b, 0x02); // Shadow 0xf0000
   memcpy((void *)0xf0000, (void *)0x60000, 0x10000);
   // Enable cache
-  int cr0;
+  int cr0, cr3;
   asm("mov %%cr0, %0" : "=r"(cr0));
+  asm("mov %%cr3, %0" : "=r"(cr3));
   printf("CR0: %x\n", cr0);
+  printf("CR3: %x\n", cr3);
   // Enable internal cache
   cr0 &= ~0x60000000;
-  // Flush cache
+  // Enable external cache
+  cr3 |= 0x00000008;
+  cr3 &= ~0x00000010;
   asm("wbinvd");
+  asm("mov %0, %%cr3" : : "r"(cr3));
   asm("mov %0, %%cr0" : : "r"(cr0));
   printf("CR0: %x\n", cr0);
-  // Now not sure what this does but seems to increase performance:
-  //
-  //writeReg2(0x91, 0xAA);// Enable cache?
-  asm("wbinvd");
-
+  // Not sure what this does. Bus states?
+  writeReg480(0x91, 0x0E);
+  // writeReg480(0x92, 0xF0);
 }
 
 int detect_shadowing(int address, int msg);
+
+#define REG 0x96
+#define INTERVAL 500
+#define STRIDE 0x1
+
+static unsigned int* const prev_top = (unsigned int*)(0x1000);
+static int prev_val = 0;
+static int count = 0;
+
+// After runtime init, internal state is valid
+void chipset_post() {
+  *prev_top = probeRam(0x100000, 0x1000, 0);
+  unsigned int try_new_registers(unsigned int ticks) {
+    printf("UM82C206: %d\n", readReg206(0x01));
+    int reg = REG;
+    if (prev_val == 0) {
+      unsigned char val = readReg480(reg);
+      prev_val = val;
+    }
+    int new_val = (prev_val + STRIDE) & 0xff;
+    printf("Trying 0x%x: %x\n", reg, new_val);
+    writeReg480(reg, new_val);
+    byte set_val = readReg480(reg);
+    if (new_val != set_val) {
+      printf("Failed to set 0x%x to %x, got %x\n", reg, new_val, set_val);
+    }
+    prev_val = new_val;
+    // Was there a remap?
+    unsigned int top = probeRam(0x100000, 0x1000, 0);
+    if (top != *prev_top) {
+      printf("Found remap from %x to %x\n", prev_top + 0x100000, top + 0x100000);
+      *prev_top = top;
+    }
+    if (detect_shadowing(0xFFFF0000, 0)) {
+      printf("Shadowing at FFFF0000\n");
+    }
+    count++;
+    if (count > 256) {
+      // Beep
+      outb(0x61, inb(0x61) | 3);
+      interrupts_disable();
+      asm("hlt");
+    }
+    return ticks;
+  }
+  //interrupts_register_timer_callback(try_new_registers, INTERVAL);
+}
+
 
 inline static void set_beep_freq(int freq) {
   outb(0x43, 0xb6);
@@ -192,9 +265,9 @@ void chipset_explore() {
   // Read initial values
   int regs[0xFF];
   int regs2[0xFF];
-  for(int i = 0; i < 0xFF; i++) {
-    regs[i] = readReg(i);
-    regs2[i] = readReg2(i);
+  for (int i = 0; i < 0xFF; i++) {
+    regs[i] = readReg206(i);
+    regs2[i] = readReg480(i);
   }
   int (*probeSpeedLower)() = shadowed_call(probeSpeed);
   int (*probeMemSpeedLower)() = shadowed_call(probeMemSpeed);
@@ -205,33 +278,31 @@ void chipset_explore() {
   int i = 0x70;
   int resume = 0xff;
   int toggle_mode = 1;
-  //int resume = cmos_read(0x16);
+  // int resume = cmos_read(0x16);
   printf("Sentinel location: %x\n", &sentinel);
   int orig_speed = probeSpeedLower();
   printf("Orig Speed: %d\n", orig_speed);
   int mem_speed = probeMemSpeedLower();
   printf("Orig Mem Speed: %d\n", mem_speed);
   // Frequencies of major scale
-  int freq_scale[] = {
-      130, 146, 164, 174, 196, 220, 246, 261
-  };
+  int freq_scale[] = {130, 146, 164, 174, 196, 220, 246, 261};
   if (resume >= 0xFF) {
     resume = 0;
   } else {
     printf("Failure reg %x val %d\n", i, resume);
     resume++;
   }
-  printf("%x: %x\n", i, readReg2(i));
+  printf("%x: %x\n", i, readReg480(i));
   for (int j = resume; j <= 0xFF; j++) {
     interrupts_watchdog_reset();
     if (toggle_mode && j > 0x7) {
       break;
     }
-    //cmos_write(0x16, j);
-    set_beep_freq(freq_scale[j&0x7] * 2);
+    // cmos_write(0x16, j);
+    set_beep_freq(freq_scale[j & 0x7] * 2);
     // Enable beep
     outb(0x61, inb(0x61) | 3);
-    int byte = readReg2(i);
+    int byte = readReg480(i);
     int new_byte;
     if (toggle_mode) {
       int toggle = 1 << j;
@@ -242,12 +313,12 @@ void chipset_explore() {
     printf("%d: %x\n", j, new_byte);
     // Flush cache just in case
     asm("wbinvd");
-    writeReg2(i, new_byte);
+    writeReg480(i, new_byte);
     // Disable beep
     if (sentinel != 0xceaddead) {
       printf("Sentinel corrupted: %x\n", sentinel);
-      //outb(0x61, inb(0x61) & ~3);
-      char *mem = (char*)0x1000;
+      // outb(0x61, inb(0x61) & ~3);
+      char *mem = (char *)0x1000;
       while (1) {
         // enable beep
         set_beep_freq(((int)mem >> 20) + 100);
@@ -262,39 +333,42 @@ void chipset_explore() {
           break;
         }
         outb(0x61, inb(0x61) & ~3);
-        mem +=4;
+        mem += 4;
       }
-      writeReg2(i, byte);
-      printf("Found sentinel at %x which is a shift of %d\n", mem, mem - (char*)sentinel);
+      writeReg480(i, byte);
+      printf("Found sentinel at %x which is a shift of %d\n", mem,
+             mem - (char *)sentinel);
     } else {
       int new_speed = probeSpeedLower();
       printf("New speed: %d\n", new_speed);
       if (abs(new_speed - orig_speed) > 100) {
-        printf("Bit %d is a performance change of %i\n", j, abs(new_speed - orig_speed));
+        printf("Bit %d is a performance change of %i\n", j,
+               abs(new_speed - orig_speed));
       }
       int new_mem_speed = probeMemSpeed();
       printf("New mem speed: %d\n", new_mem_speed);
       if (abs(new_mem_speed - mem_speed) > 100) {
-        printf("Bit %d is a mem performance change of %i\n", j, abs(new_mem_speed - mem_speed));
+        printf("Bit %d is a mem performance change of %i\n", j,
+               abs(new_mem_speed - mem_speed));
       }
       if (detect_shadowing(0xFFF00000, 0)) {
         printf("Bit %d is a shadowing change in upper ROM region\n", j);
       }
       // Probe all registers for changes
-      for(int i = 0; i < 0xFF; i++) {
-        int byte = readReg(i);
+      for (int i = 0; i < 0xFF; i++) {
+        int byte = readReg206(i);
         if (byte != regs[i]) {
           printf("Found reg(23) %x changed from %x to %x\n", i, regs[i], byte);
           // regs[i] = byte;
         }
-        byte = readReg2(i);
+        byte = readReg480(i);
         if (byte != regs2[i]) {
           printf("Found reg(24) %x changed from %x to %x\n", i, regs2[i], byte);
           // regs2[i] = byte;
         }
       }
       outb(0x61, inb(0x61) & ~3);
-      writeReg2(i, byte);
+      writeReg480(i, byte);
     }
   }
   /*for(;;) {
@@ -316,3 +390,10 @@ void chipset_pci_config_write(dword base_config_ddress, dword offset,
                               dword value) {}
 
 void chipset_shadow_rom_from_src(dword src, dword dst, dword size) {}
+
+void chipset_fast_reset(void) {
+  // Reset through KB controller
+  printf("Resetting\n");
+  outb(0x64, 0xFE);
+}
+

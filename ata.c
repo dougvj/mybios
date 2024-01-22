@@ -1,9 +1,25 @@
 #include "output.h"
 #include "io.h"
 #include "postcode.h"
+#include "interrupts.h"
 #define PRIMARY 0x1F0
 #define SECONDARY 0x170
+#define ATA_MASTER   0xA0
+#define ATA_SLAVE    0xB0
+#define ATA_IDENTIFY 0xEC
+#define ATA_READ_SECTORS 0x20
 static int _base_port = 0;
+
+typedef struct drive_info {
+    char model[41];
+    unsigned int blocks;
+    unsigned int controller;
+    bool lba;
+    bool slave;
+} drive_info_t;
+
+int num_drives;
+drive_info_t drives[4];
 
 unsigned short ataReadData() {
     return inw(_base_port + 0);
@@ -29,7 +45,7 @@ int ataDetectController() {
     return (controller == 0xA5);
 }
 
-void ataDrive(unsigned char drv) {
+void ataDriveHead(unsigned char drv) {
     outb(_base_port + 6, drv);
 }
 
@@ -41,11 +57,8 @@ unsigned char ataStatus() {
     return inb(_base_port + 7);
 }
 
-#define ATA_MASTER   0xA0
-#define ATA_SLAVE    0xB0
-#define ATA_IDENTIFY 0xEC
 void ataIdentify(unsigned char drv) {
-    ataDrive(drv);
+    ataDriveHead(drv);
     ataSectorCount(0);
     ataLBA(0);
     ataCommand(ATA_IDENTIFY);
@@ -82,27 +95,49 @@ void ataIdentify(unsigned char drv) {
     }
     model[40] = '\0';
     unsigned int blocks = ident[60] | (ident[61] << 16);
+    bool lba = blocks > 0;
     printf("Detected\n  %s ", model);
     if (blocks > 0) {
         unsigned int size_mb = (blocks * 512) / 1024 / 1024;
         printf("LBA, %d MB\n", size_mb);
     } else {
         if (ident[53] & 0x1) {
-            unsigned int blocks = ident[57] | (ident[58] << 16);
+            blocks = ident[57] | (ident[58] << 16);
             unsigned int size_mb = (blocks * 512) / 1024 / 1024;
             printf("CHS, %d MB\n", size_mb);
         } else {
             printf("??? Older drive suspected\n");
         }
     }
-
+    drives[num_drives].controller = _base_port;
+    drives[num_drives].lba = lba;
+    drives[num_drives].slave = drv == ATA_SLAVE;
+    drives[num_drives].blocks = blocks;
+    for (int i = 0; i < 40; i++) {
+        drives[num_drives].model[i] = model[i];
+    }
+    num_drives++;
 }
 
 void ataSetController(int controller) {
     _base_port = controller;
 }
 
+void interrupt ataHandler14(interrupt_frame_t* frame) {
+    //printf("ATA Primary Interrupt at %x\n", frame->ip);
+    outb(0x20, 0x20);
+    outb(0xA0, 0x20);
+}
+
+void interrupt ataHandler15(interrupt_frame_t* frame) {
+    //printf("ATA Secondary Interrupt at %x\n", frame->ip);
+    outb(0x20, 0x20);
+    outb(0xA0, 0x20);
+}
+
 void ataInit() {
+    interrupts_set_interrupt_handler(IRQ14, ataHandler14);
+    interrupts_set_interrupt_handler(IRQ15, ataHandler15);
     ataSetController(PRIMARY);
     if (!ataDetectController()) {
         printf("Primary IDE Controller not found\n");
@@ -121,4 +156,43 @@ void ataInit() {
         printf("Scanning Secondary Slave...");
         ataIdentify(ATA_SLAVE);
     }
+}
+
+int numDrives() {
+  return num_drives;
+}
+
+int ataRead(int drive, int sector, int count, char* buffer) {
+  if (drive >= num_drives || drive < 0) {
+    printf("Drive %d not found\n", drive);
+    return -1;
+  }
+  drive_info_t* info = &drives[drive];
+  ataSetController(info->controller);
+  if (info->lba) {
+    ataDriveHead((0xE0 | info->slave << 6) | (sector >> 24));
+    outb(_base_port + 1, 0);
+    ataSectorCount(count);
+    ataLBA(sector);
+    ataCommand(ATA_READ_SECTORS);
+    unsigned char status;
+    int c = 0;
+    while (c< 512 * count) {
+      while ((status = ataStatus())) {
+        if (!(status & 0x80)) {
+          break;
+        }
+      }
+      for (int i = 0; i < 256; i++) {
+        unsigned short data = ataReadData();
+        buffer[c++] = data & 0xFF;
+        buffer[c++] = (data & 0xFF00) >> 8;
+      }
+    }
+    printf("Read %d bytes\n", c);
+    return c;
+  } else {
+    printf("CHS not supported\n");
+    return -1;
+  }
 }

@@ -2,7 +2,7 @@
 extern char _bss_start, _bss_end, _data_start, _data_load_start, _data_end;
 
 void initRuntime() {
-    vgaCls(0);
+    vgaCls();
     printf("Initializing runtime areas from %x\n", &_data_load_start);
     char *src = &_data_load_start;
     char *dst = &_data_start;

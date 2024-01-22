@@ -78,24 +78,15 @@ install_ivt:
     pop ds
     ret
 
-call_int_msg:
-db "Call Interrupt: ", 0
-
 global call_int
 call_int:
     push ds
     push ax
-    push esi
     mov ax, 0x0
     mov ds, ax
-    mov esi, call_int_msg
-    call serial_write_string
-    mov ax, di
-    call serial_write_hex
     pop ax
     shl di, 2
     pushf
     call far [ds:di]
     pop ds
-    pop esi
     retf

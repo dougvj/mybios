@@ -1,6 +1,6 @@
 BITS 16
 CPU 486
-%include "pcode.asm"ex
+%include "pcode.asm"
 extern wait_forever
 extern fill_dummy_ivt
 extern init_video
@@ -10,7 +10,8 @@ extern init_serial
 extern serial_write_hex
 extern serial_write_byte
 extern serial_write_string
-
+extern soft_handover
+extern soft_handover_end
 %macro WAIT 1
     push ax
     mov ax, %1
@@ -89,12 +90,17 @@ init_runtime_16:
     call init_serial
     mov esi, hello
     call serial_write_string
-    xchg bx, bx
+%ifdef EARLY_VIDEO
     call init_video
+%endif
     PCODE 0x08
     mov eax, main
     jmp dword enter_protected_mode
-
+; Used to bootstrap another BIOS using writable shadow ram
+; needs to be loaded at 0x7000:0x0000. It copies from 0x8000:0x0000 to 0xF000:0x0000
+soft_handover:
+incbin "soft_handover_S.bin"
+soft_handover_end:
 SECTION .reset
 BITS 16
 global reset_vector

@@ -1,6 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 #include "types.h"
+#include "interrupts.h"
 
 typedef struct {
   word segment;
@@ -45,4 +46,20 @@ static void* shadowed_call(void* func) {
 }
 
 void real_mode_int(real_mode_int_params* params);
+
+void soft_reset();
+
+#define assert(x) if (!(x)) { \
+  serial_set_buffered(false); \
+  printf("Assertion failed: %s\n", #x); \
+  asm("ud2"); \
+}
+
+static void msleep(dword ms) {
+  unsigned int start = interrupts_timer_ticks();
+  while ((interrupts_timer_ticks() - start) < ms) {
+    asm("hlt");
+  }
+}
+
 #endif

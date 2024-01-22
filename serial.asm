@@ -37,7 +37,7 @@ global serial_write_hex
 %endmacro
 
 init_serial:
-%ifdef ENABLE_SERIAL
+%ifdef ENABLE_EARLY_SERIAL
     push ax
     push dx
     push di
@@ -53,7 +53,7 @@ init_serial:
     ret
 
 serial_write_byte:
-%ifdef ENABLE_SERIAL
+%ifdef ENABLE_EARLY_SERIAL
     push dx
     push ax
     mov dx, 0x3f8

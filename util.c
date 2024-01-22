@@ -1,5 +1,7 @@
 #include "chipset.h"
 #include "util.h"
+#include "debug.h"
+#include "output.h"
 
 #define call_real_mode_asm() \
       "mov %7, %%bx;" \

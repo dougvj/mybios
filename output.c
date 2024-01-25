@@ -3,7 +3,7 @@
 #include "io.h"
 #include "serial.h"
 #include "types.h"
-#include "interrupts.h"
+#include "interrupt.h"
 
 static bool vga_enabled = false;
 void putc(char c)
@@ -16,7 +16,7 @@ void putc(char c)
     }*/
     if (serial_enabled()) {
       // We only want to use the buffered serial port if interrupts are enabled
-      if (interrupts_enabled()) {
+      if (itr_enabled()) {
           serial_write(c);
       }
       else {
@@ -34,12 +34,12 @@ void set_vga_enabled(bool enabled) {
     vga_enabled = enabled;
 }
 
-void itoa(dword value, char* buf, int base) {
+void itoa(u32 value, char* buf, int base) {
     int len = 0;
     while (value != 0) {
-        dword d = value % base;
+        u32 d = value % base;
         value = value / base;
-        byte c;
+        u8 c;
         if (d < 10) {
             c = 0x30 + d;
         }
@@ -75,18 +75,18 @@ void printf(const char* format, ...) {
             s++;
             char* ins;
             char conv[10];
-            dword value;
+            u32 value;
              switch (*s) {
                 case 'u':
                 case 'd':
                 case 'i':
-                    value = va_arg(args, dword);
+                    value = va_arg(args, u32);
                     itoa(value, conv, 10);
                     ins = conv;
                     break;
                 case 'x':
                 case 'X':
-                    value = va_arg(args, dword);
+                    value = va_arg(args, u32);
                     itoa(value, conv, 16);
                     ins = conv;
                     break;
@@ -112,12 +112,12 @@ void printf(const char* format, ...) {
     va_end(args);
 }
 
-void dumpmem(dword addr, dword len) {
-  for (dword i = 0; i < len; i++) {
+void dumpmem(u32 addr, u32 len) {
+  for (u32 i = 0; i < len; i++) {
     if ((i & 0x7) == 0) {
       printf("\n%X: ", addr + i);
     }
-    printf("%X ", (dword)(*(byte*)(addr + i)));
+    printf("%X ", (u32)(*(u8*)(addr + i)));
   }
   printf("\n");
 }

@@ -1,4 +1,4 @@
-#include "interrupts.h"
+#include "interrupt.h"
 #include "io.h"
 #include "output.h"
 #include "post.h"
@@ -13,16 +13,16 @@ static void small_delay() { asm("nop"); }
 // This writes to the UM82C206. There is only one register which controls the
 // wait states of accessing the PIC, PIT, etc which this chip implements
 // BREAKTHROUGH: This chip is the same as the Opti 82C206
-static void writeReg206(char reg, char byte) {
+static void writeReg206(char reg, char u8) {
   outb(0x22, reg);
   small_delay();
-  outb(0x23, byte);
+  outb(0x23, u8);
 }
 
-static void writeReg480(char reg, char byte) {
+static void writeReg480(char reg, char u8) {
   outb(0x22, reg);
   small_delay();
-  outb(0x24, byte);
+  outb(0x24, u8);
 }
 
 static char readReg206(char reg) {
@@ -125,9 +125,9 @@ extern void cmos_write(unsigned char addr, unsigned char value);
 
 void dump_regs() {
   for (int i = 0; i < 0x100; i++) {
-    int byte = readReg480(i);
-    if (byte != 0xff) {
-      printf("Found reg at 0x%x (via reg 24): %x\n", i, byte);
+    int u8 = readReg480(i);
+    if (u8 != 0xff) {
+      printf("Found reg at 0x%x (via reg 24): %x\n", i, u8);
     }
     //}
   }
@@ -222,7 +222,7 @@ void chipset_post() {
     int new_val = (prev_val + STRIDE) & 0xff;
     printf("Trying 0x%x: %x\n", reg, new_val);
     writeReg480(reg, new_val);
-    byte set_val = readReg480(reg);
+    u8 set_val = readReg480(reg);
     if (new_val != set_val) {
       printf("Failed to set 0x%x to %x, got %x\n", reg, new_val, set_val);
     }
@@ -240,12 +240,12 @@ void chipset_post() {
     if (count > 256) {
       // Beep
       outb(0x61, inb(0x61) | 3);
-      interrupts_disable();
+      itr_disable();
       asm("hlt");
     }
     return ticks;
   }
-  //interrupts_register_timer_callback(try_new_registers, INTERVAL);
+  //s_register_timer_callback(try_new_registers, INTERVAL);
 }
 
 
@@ -294,7 +294,6 @@ void chipset_explore() {
   }
   printf("%x: %x\n", i, readReg480(i));
   for (int j = resume; j <= 0xFF; j++) {
-    interrupts_watchdog_reset();
     if (toggle_mode && j > 0x7) {
       break;
     }
@@ -302,18 +301,18 @@ void chipset_explore() {
     set_beep_freq(freq_scale[j & 0x7] * 2);
     // Enable beep
     outb(0x61, inb(0x61) | 3);
-    int byte = readReg480(i);
-    int new_byte;
+    int u8 = readReg480(i);
+    int new_u8;
     if (toggle_mode) {
       int toggle = 1 << j;
-      new_byte = byte ^ toggle;
+      new_u8 = u8 ^ toggle;
     } else {
-      new_byte = j;
+      new_u8 = j;
     }
-    printf("%d: %x\n", j, new_byte);
+    printf("%d: %x\n", j, new_u8);
     // Flush cache just in case
     asm("wbinvd");
-    writeReg480(i, new_byte);
+    writeReg480(i, new_u8);
     // Disable beep
     if (sentinel != 0xceaddead) {
       printf("Sentinel corrupted: %x\n", sentinel);
@@ -335,7 +334,7 @@ void chipset_explore() {
         outb(0x61, inb(0x61) & ~3);
         mem += 4;
       }
-      writeReg480(i, byte);
+      writeReg480(i, u8);
       printf("Found sentinel at %x which is a shift of %d\n", mem,
              mem - (char *)sentinel);
     } else {
@@ -356,19 +355,19 @@ void chipset_explore() {
       }
       // Probe all registers for changes
       for (int i = 0; i < 0xFF; i++) {
-        int byte = readReg206(i);
-        if (byte != regs[i]) {
-          printf("Found reg(23) %x changed from %x to %x\n", i, regs[i], byte);
-          // regs[i] = byte;
+        int u8 = readReg206(i);
+        if (u8 != regs[i]) {
+          printf("Found reg(23) %x changed from %x to %x\n", i, regs[i], u8);
+          // regs[i] = u8;
         }
-        byte = readReg480(i);
-        if (byte != regs2[i]) {
-          printf("Found reg(24) %x changed from %x to %x\n", i, regs2[i], byte);
-          // regs2[i] = byte;
+        u8 = readReg480(i);
+        if (u8 != regs2[i]) {
+          printf("Found reg(24) %x changed from %x to %x\n", i, regs2[i], u8);
+          // regs2[i] = u8;
         }
       }
       outb(0x61, inb(0x61) & ~3);
-      writeReg480(i, byte);
+      writeReg480(i, u8);
     }
   }
   /*for(;;) {
@@ -382,14 +381,14 @@ bool chipset_has_rom_shadowing() { return false; }
 
 bool chipset_has_pci() { return false; }
 
-dword chipset_pci_config_read(dword base_config_ddress, dword offset) {
+u32 chipset_pci_config_read(u32 base_config_ddress, u32 offset) {
   return 0;
 }
 
-void chipset_pci_config_write(dword base_config_ddress, dword offset,
-                              dword value) {}
+void chipset_pci_config_write(u32 base_config_ddress, u32 offset,
+                              u32 value) {}
 
-void chipset_shadow_rom_from_src(dword src, dword dst, dword size) {}
+void chipset_shadow_rom_from_src(u32 src, u32 dst, u32 size) {}
 
 void chipset_fast_reset(void) {
   // Reset through KB controller

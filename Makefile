@@ -17,14 +17,14 @@ CFLAGS=-fno-stack-protector \
 			 -funsigned-char \
 			 -Wall \
 			 -Wextra \
-			 -Werror \
 			 -I./
 
+CFLAGS += -Werror
 CC=gcc
-#CHIPSET=440fx
+CHIPSET=440fx
 #CHIPSET=null
 #CHIPSET=sis8c460
-CHIPSET=um82c480
+#CHIPSET=um82c480
 C_SRC = $(wildcard *.c)
 ASM_SRC = $(wildcard *.asm)
 ASM_BLOB_SRC = $(wildcard *.S)
@@ -34,16 +34,22 @@ ASM_BLOBS = $(ASM_BLOB_SRC:%.S=%_S.bin)
 
 all: bios.bin
 
+ROM_SIZE=64K
 
 DEFINES=
-#DEFINES += -DBOCHS
-DEFINES += -DENABLE_SERIAL
+DEFINES += -DBOCHS
+#DEFINES += -DDEBUG
+#DEFINES += -DENABLE_SERIAL
 #DEFINES += -DENABLE_EARLY_SERIAL
 #DEFINES += -DENABLE_EARLY_VIDEO
+DEFINES += -DENABLE_PCI
 CFLAGS += $(DEFINES)
 ASMFLAGS += $(DEFINES)
 
+DEFINES += -DROM_SIZE=${ROM_SIZE}
+
 bochs: bios.bin bios.sym
+	-rm bochs.img.lock
 	bochs -q
 
 qemu: bios.bin bios.sym
@@ -59,7 +65,7 @@ padded: bios.bin
 	chmod +x  padded_bios_*.bin
 
 rom.ld: rom_template.ld
-	cpp -P rom_template.ld -o rom.ld
+	cpp -DSTAY_IN_LOW_MEMORY -DROM_SIZE=${ROM_SIZE} -P rom_template.ld -o rom.ld
 
 bios.sym: bios.elf
 	objdump -t bios.elf | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > bios.sym

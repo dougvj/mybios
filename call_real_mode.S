@@ -24,7 +24,10 @@ BITS 16
     pop eax
     push bp
     mov bp, sp
+    xchg bx, bx
+    sti
     call far [ss:bp+6]
+    cli
     pop bp
     ; Renenter protected mode at ret
     push eax
@@ -32,6 +35,7 @@ BITS 16
     jmp 0xF000:0xFF70
 ret:
 BITS 32
+    sti
     pop eax
     ret
 _idt:

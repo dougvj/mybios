@@ -1,3 +1,10 @@
 *.o
 rom.ld
 *.bin
+*.sym
+*.elf
+*.BIN
+*.log
+*.pid
+*.txt
+serial.out

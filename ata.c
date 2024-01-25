@@ -1,202 +1,265 @@
-#include "output.h"
+#include "ata.h"
+#include "interrupt.h"
 #include "io.h"
+#include "output.h"
 #include "postcode.h"
-#include "interrupts.h"
-#define PRIMARY 0x1F0
-#define SECONDARY 0x170
-#define ATA_MASTER   0xA0
-#define ATA_SLAVE    0xB0
+
 #define ATA_IDENTIFY 0xEC
 #define ATA_READ_SECTORS 0x20
-static int _base_port = 0;
 
-typedef struct drive_info {
-    char model[41];
-    unsigned int blocks;
-    unsigned int controller;
-    bool lba;
-    bool slave;
-} drive_info_t;
+enum ata_regs {
+  ATA_DATA = 0,
+  ATA_ERROR = 1,
+  ATA_SECTOR_COUNT = 2,
+  ATA_LBA_LO = 3,
+  ATA_LBA_MID = 4,
+  ATA_LBA_HI = 5,
+  ATA_DRIVE_HEAD = 6,
+  ATA_STATUS = 7,
+  ATA_COMMAND = 7
+};
 
-int num_drives;
-drive_info_t drives[4];
+enum ata_status {
+  ATA_STATUS_ERR = 0x01,
+  ATA_STATUS_DRQ = 0x08,
+  ATA_STATUS_SRV = 0x10,
+  ATA_STATUS_DF = 0x20,
+  ATA_STATUS_RDY = 0x40,
+  ATA_STATUS_BSY = 0x80
+};
 
-unsigned int ataGetDriveSize(int drive) {
-    return drives[drive].blocks;
+enum ata_commands {
+  ATA_CMD_READ_PIO = 0x20,
+  ATA_CMD_READ_PIO_EXT = 0x24,
+  ATA_CMD_READ_DMA = 0xC8,
+  ATA_CMD_READ_DMA_EXT = 0x25,
+  ATA_CMD_WRITE_PIO = 0x30,
+  ATA_CMD_WRITE_PIO_EXT = 0x34,
+  ATA_CMD_WRITE_DMA = 0xCA,
+  ATA_CMD_WRITE_DMA_EXT = 0x35,
+  ATA_CMD_CACHE_FLUSH = 0xE7,
+  ATA_CMD_CACHE_FLUSH_EXT = 0xEA,
+  ATA_CMD_PACKET = 0xA0,
+  ATA_CMD_IDENTIFY_PACKET = 0xA1,
+  ATA_CMD_IDENTIFY = 0xEC
+};
+
+// divide by 2 because we lookup u16s
+enum ata_identify {
+  ATA_IDENT_DEVICETYPE = 0,
+  ATA_IDENT_CYLINDERS = 1,
+  ATA_IDENT_HEADS = 3,
+  ATA_IDENT_SECTORS = 6,
+  ATA_IDENT_SERIAL = 10,
+  ATA_IDENT_MODEL = 27,
+  ATA_IDENT_FIELDVALID = 53,
+  ATA_IDENT_MAX_LBA = 60,
+  ATA_IDENT_COMMANDSETS = 82,
+  ATA_IDENT_MAX_LBA_EXT = 100
+};
+
+struct dev_ata {
+  u32 base;
+  u32 irq;
+  bool slave_selected;
+};
+
+
+static bool detect_controller(dev_ata *dev) {
+  outb(dev->base + 2, 0xA5);
+  unsigned char controller = inb(dev->base + 2);
+  return (controller == 0xA5);
 }
 
-unsigned short ataReadData() {
-    return inw(_base_port + 0);
-}
+static u8 read_drive_head(dev_ata *dev) { return inb(dev->base + ATA_DRIVE_HEAD); }
 
-void ataWriteData(unsigned short data) {
-    outw(_base_port + 0, data);
-}
 
-void ataSectorCount(unsigned short count) {
-    outb(_base_port + 2, count);
-}
+static u8 status(dev_ata *dev) { return inb(dev->base + ATA_STATUS); }
 
-void ataLBA(unsigned int addr) {
-    outb(_base_port + 3, addr & 0xFF);
-    outb(_base_port + 4, (addr >> 8) & 0xFF);
-    outb(_base_port + 5, (addr >> 16) & 0xFF);
-}
-
-int ataDetectController() {
-    outb(_base_port + 2, 0xA5);
-    unsigned char controller = inb(_base_port + 2);
-    return (controller == 0xA5);
-}
-
-void ataDriveHead(unsigned char drv) {
-    outb(_base_port + 6, drv);
-}
-
-void ataCommand(unsigned char cmd) {
-    outb(_base_port + 7, cmd);
-}
-
-unsigned char ataStatus() {
-    return inb(_base_port + 7);
-}
-
-void ataIdentify(unsigned char drv) {
-    ataDriveHead(drv);
-    ataSectorCount(0);
-    ataLBA(0);
-    ataCommand(ATA_IDENTIFY);
-    unsigned char status;
-    while ((status = ataStatus())) {
-        if (!(status & 0x80)) {
-            break;
-        }
-        postCode(status);
+bool ata_identify(dev_ata *dev, bool slave, ata_drive *info) {
+  info->dev = NULL;
+  ata_drive_select(dev,slave);
+  outb(dev->base + ATA_SECTOR_COUNT, 0);
+  outb(dev->base + ATA_LBA_LO, 0);
+  outb(dev->base + ATA_LBA_MID, 0);
+  outb(dev->base + ATA_LBA_HI, 0);
+  outb(dev->base + ATA_COMMAND, ATA_IDENTIFY);
+  u8 s;
+  while ((s = status(dev))) {
+    if (!(s & ATA_STATUS_BSY)) {
+      break;
     }
-    if (status == 0) {
-        printf(".Not Found\n");
-        return;
-    }
-    printf(".");
-    while ((status = ataStatus())) {
-        if (status & 0x8) {
-            break;
-        }
-        if (status & 0x1) {
-            printf(".Error\n");
-            return;
-        }
-        postCode(status);
-    }
-    unsigned short ident[256];
-    for (int i = 0; i < 256; i++) {
-        ident[i] = ataReadData();
-    }
-    char model[41];
-    for (int i = 27; i < 47; i++) {
-        model[((i - 27) << 1) + 1] = ident[i] & 0xFF;
-        model[((i - 27) << 1)] = (ident[i] & 0xFF00) >> 8;
-    }
-    model[40] = '\0';
-    unsigned int blocks = ident[60] | (ident[61] << 16);
-    bool lba = blocks > 0;
-    printf("Detected\n  %s ", model);
-    if (blocks > 0) {
-        unsigned int size_mb = (blocks * 512) / 1024 / 1024;
-        printf("LBA, %d MB\n", size_mb);
-    } else {
-        if (ident[53] & 0x1) {
-            blocks = ident[57] | (ident[58] << 16);
-            unsigned int size_mb = (blocks * 512) / 1024 / 1024;
-            printf("CHS, %d MB\n", size_mb);
-        } else {
-            printf("??? Older drive suspected\n");
-        }
-    }
-    drives[num_drives].controller = _base_port;
-    drives[num_drives].lba = lba;
-    drives[num_drives].slave = drv == ATA_SLAVE;
-    drives[num_drives].blocks = blocks;
-    for (int i = 0; i < 40; i++) {
-        drives[num_drives].model[i] = model[i];
-    }
-    num_drives++;
-}
-
-void ataSetController(int controller) {
-    _base_port = controller;
-}
-
-void interrupt ataHandler14(interrupt_frame_t* frame) {
-    //printf("ATA Primary Interrupt at %x\n", frame->ip);
-    outb(0x20, 0x20);
-    outb(0xA0, 0x20);
-}
-
-void interrupt ataHandler15(interrupt_frame_t* frame) {
-    //printf("ATA Secondary Interrupt at %x\n", frame->ip);
-    outb(0x20, 0x20);
-    outb(0xA0, 0x20);
-}
-
-void ataInit() {
-    interrupts_set_interrupt_handler(IRQ14, ataHandler14);
-    interrupts_set_interrupt_handler(IRQ15, ataHandler15);
-    ataSetController(PRIMARY);
-    if (!ataDetectController()) {
-        printf("Primary IDE Controller not found\n");
-    } else {
-        printf("Scanning Primary Master...");
-        ataIdentify(ATA_MASTER);
-        printf("Scanning Primary Slave...");
-        ataIdentify(ATA_SLAVE);
-    }
-    ataSetController(SECONDARY);
-    if (!ataDetectController()) {
-        printf("Secondary IDE Controller not found\n");
-    } else {
-        printf("Scanning Secondary Master...");
-        ataIdentify(ATA_MASTER);
-        printf("Scanning Secondary Slave...");
-        ataIdentify(ATA_SLAVE);
-    }
-}
-
-int numDrives() {
-  return num_drives;
-}
-
-int ataRead(int drive, int sector, int count, char* buffer) {
-  if (drive >= num_drives || drive < 0) {
-    printf("Drive %d not found\n", drive);
-    return -1;
   }
-  drive_info_t* info = &drives[drive];
-  ataSetController(info->controller);
-  if (info->lba) {
-    ataDriveHead((0xE0 | info->slave << 6) | (sector >> 24));
-    outb(_base_port + 1, 0);
-    ataSectorCount(count);
-    ataLBA(sector);
-    ataCommand(ATA_READ_SECTORS);
-    unsigned char status;
-    int c = 0;
-    while (c< 512 * count) {
-      while ((status = ataStatus())) {
-        if (!(status & 0x80)) {
-          break;
-        }
-      }
-      for (int i = 0; i < 256; i++) {
-        unsigned short data = ataReadData();
-        buffer[c++] = data & 0xFF;
-        buffer[c++] = (data & 0xFF00) >> 8;
-      }
+  if (s == 0) {
+    printf(".Not Found\n");
+    return false;
+  }
+  printf(".");
+  while ((s = status(dev))) {
+    if (s & ATA_STATUS_DRQ) {
+      break;
     }
-    printf("Read %d bytes\n", c);
-    return c;
+    if (s & ATA_STATUS_ERR) {
+      printf(".Error\n");
+      return false;
+    }
+  }
+  u16 ident[256];
+  for (int i = 0; i < 256; i++) {
+    ident[i] = inw(dev->base + ATA_DATA);
+  }
+  int j = 0;
+  for (int i = ATA_IDENT_MODEL; i < ATA_IDENT_MODEL + 20; i++) {
+    info->model[j++] = (ident[i] & 0xFF00) >> 8;
+    info->model[j++] = ident[i] & 0xFF;
+  }
+  info->model[40] = '\0';
+  u32 blocks = ident[60] | (ident[61] << 16);
+  u64 blocks48 = ident[100] | (ident[101] << 16) | ((u64)ident[102] << 32) |
+                 ((u64)ident[103] << 48);
+  bool lba = blocks > 0;
+  u16 heads = ident[ATA_IDENT_HEADS];
+  u16 sectors = ident[ATA_IDENT_SECTORS];
+  u16 cylinders = ident[ATA_IDENT_CYLINDERS];
+
+  printf("Detected\n  %s ", info->model);
+  if (blocks > 0) {
+    unsigned int size_mb = (blocks * 512) / 1024 / 1024;
+    printf("LBA, %d MB", size_mb);
   } else {
-    printf("CHS not supported\n");
-    return -1;
+    if (ident[53] & 0x1) {
+      blocks = ident[57] | (ident[58] << 16);
+      unsigned int size_mb = (blocks * 512) / 1024 / 1024;
+      printf("CHS, %d MB", size_mb);
+    } else {
+      blocks = heads * sectors * cylinders;
+      unsigned int size_mb = (blocks * 512) / 1024 / 1024;
+      printf("CHS(?):, %d MB", size_mb);
+    }
+  }
+  printf("  %dc %dh %ds\n", cylinders, heads, sectors);
+  info->flags = 0;
+  info->flags |= lba ? ATA_DRIVE_LBA28 : 0;
+  info->flags |= blocks48 > 0 ? ATA_DRIVE_LBA48 : 0;
+  info->flags |=  slave ? ATA_DRIVE_SLAVE : 0;
+  info->type = ident[ATA_IDENT_DEVICETYPE];
+  info->cylinders = cylinders;
+  info->heads = heads;
+  info->sectors = sectors;
+  info->blocks28 = blocks;
+  info->blocks48 = blocks48;
+  info->dev = dev;
+  return true;
+}
+
+void ata_wait(dev_ata *dev) {
+  u8 s;
+  while ((s = status(dev))) {
+    if (!(s & ATA_STATUS_BSY)) {
+      break;
+    }
   }
 }
+
+void ata_drive_select(dev_ata *dev, bool slave) {
+  if (dev->slave_selected == slave) {
+    return;
+  }
+  outb(dev->base + ATA_DRIVE_HEAD, 0xA0 | (slave ? 0x10 : 0));
+  u8 s;
+  int count = 0;
+  while (1) {
+    s = status(dev);
+    count++;
+    if (!(s & ATA_STATUS_BSY)) {
+      if (count > 15) {
+        break;
+      }
+    }
+  }
+  dev->slave_selected = slave;
+}
+
+
+static void irq_handler(u8 vector, itr_frame *frame, void* data) {
+  dev_ata unused *dev = (dev_ata *)data;
+  //printf("ATA Interrupt for %x\n", dev->base);
+}
+
+
+static dev_ata ata_devices[4];
+static int num_devices = 0;
+
+dev_ata* ata_init(u32 base, u32 irq) {
+  if (num_devices >= 4) {
+    printf("Too many ATA devices\n");
+    return NULL;
+  }
+  dev_ata *dev = &ata_devices[num_devices++];
+  dev->base = base;
+  dev->irq = irq;
+  if (!detect_controller(dev)) {
+    num_devices--;
+    return NULL;
+  }
+  dev->slave_selected = true;
+  ata_drive_select(dev, false);
+  itr_set_handler(irq, irq_handler, dev);
+  return dev;
+}
+
+u32 ata_read_lba(dev_ata *dev, u32 sector, u16 count, char *buffer) {
+  outb(dev->base + ATA_DRIVE_HEAD, (0xE0 | (dev->slave_selected ? 0x10 : 0)) | ((sector >> 24) & 0xF));
+  outb(dev->base + ATA_ERROR, 0);
+  outb(dev->base + ATA_SECTOR_COUNT, count);
+  outb(dev->base + ATA_LBA_LO, sector);
+  outb(dev->base + ATA_LBA_MID, sector >> 8);
+  outb(dev->base + ATA_LBA_HI, sector >> 16);
+  outb(dev->base + ATA_COMMAND, ATA_CMD_READ_PIO);
+  u8 s;
+  int c = 0;
+  while (c < 512 * count) {
+    while ((s = status(dev))) {
+      if (!(s & 0x80)) {
+        break;
+      }
+    }
+    for (int i = 0; i < 256; i++) {
+      u16 data = inw(dev->base + ATA_DATA);
+      buffer[c++] = data & 0xFF;
+      buffer[c++] = (data & 0xFF00) >> 8;
+    }
+  }
+  printf("Read %d bytes\n", c);
+  return c;
+}
+
+
+u32 ata_read_chs(dev_ata* dev, u32 cylinder, u8 head, u16 sector, u16 count, char* buffer) {
+  outb(dev->base + ATA_DRIVE_HEAD, (0xA0 | (dev->slave_selected ? 0x10 : 0)) | head);
+  outb(dev->base + ATA_ERROR, 0);
+  outb(dev->base + ATA_SECTOR_COUNT, count);
+  outb(dev->base + ATA_LBA_LO, sector);
+  outb(dev->base + ATA_LBA_MID, cylinder & 0xFF);
+  outb(dev->base + ATA_LBA_HI, (cylinder >> 8) & 0xFF);
+  outb(dev->base + ATA_COMMAND, ATA_CMD_READ_PIO);
+  u8 s;
+  int c = 0;
+  while (c < 512 * count) {
+    while ((s = status(dev))) {
+      if (!(s & 0x80)) {
+        break;
+      }
+    }
+    for (int i = 0; i < 256; i++) {
+      u16 data = inw(dev->base + ATA_DATA);
+      buffer[c++] = data & 0xFF;
+      buffer[c++] = (data & 0xFF00) >> 8;
+    }
+  }
+  printf("Read %d bytes\n", c);
+  return c;
+}
+
+
+

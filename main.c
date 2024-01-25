@@ -1,6 +1,6 @@
 #include "ata.h"
 #include "chipset.h"
-#include "interrupts.h"
+#include "interrupt.h"
 #include "output.h"
 #include "pci.h"
 #include "post.h"
@@ -8,9 +8,13 @@
 #include "runtime_init.h"
 #include "serial.h"
 #include "util.h"
+#include "timer.h"
 #include "vga.h"
+#include "keyboard.h"
+#include "bios.h"
+#include "dev.h"
 
-unsigned int data_init_sentinel = 0xdeadc0de;
+u32 data_init_sentinel = 0xdeadc0de;
 
 void delay() {
   for (int i = 0; i < 1000; i++) {
@@ -21,9 +25,9 @@ void delay() {
 void find_boundary_signatures() {
   printf("Searching for other banks' signatures 0x%X\n", 0xDEADBEEF);
   int count = 0;
-  unsigned int start = 0x0;
+  u32 start = 0x0;
   do {
-    if (*(unsigned int *)start == 0xDEADBEEF) {
+    if (*(u32 *)start == 0xDEADBEEF) {
       printf("Found boundary at 0x%X\n", start);
       count++;
     }
@@ -32,24 +36,24 @@ void find_boundary_signatures() {
   printf("Found %d boundaries.\n", count);
 }
 
-void cmos_write(unsigned char addr, unsigned char value) {
+void cmos_write(u8 addr, u8 value) {
   outb(0x70, addr);
   outb(0x71, value);
 }
 
-void cmos_write16(unsigned char addr, unsigned short value) {
+void cmos_write16(u8 addr, u16 value) {
   cmos_write(addr, value & 0xFF);
   cmos_write(addr + 1, value >> 8);
 }
 
-unsigned char cmos_read(unsigned char addr) {
+u8 cmos_read(u8 addr) {
   outb(0x70, addr);
   delay();
   return inb(0x71);
 }
 
-unsigned short cmos_read16(unsigned char addr) {
-  unsigned short value = cmos_read(addr + 1);
+u16 cmos_read16(u8 addr) {
+  u16 value = cmos_read(addr + 1);
   value <<= 8;
   value |= cmos_read(addr);
   return value;
@@ -63,17 +67,17 @@ void beep() {
 
 void mode13h_test() {
   // Jump to lower ROM that is shadowed
-  unsigned char *vram = (unsigned char *)0xA0000;
+  u8 *vram = (u8 *)0xA0000;
   for (int i = 0; i < 320 * 200; i++) {
     vram[i] = 0x0F;
   }
-  unsigned int count = 0;
-  unsigned int frame = 0;
-  unsigned int running_average = 0;
-  unsigned int running_average_count = 0;
+  u32 count = 0;
+  u32 frame = 0;
+  u32 running_average = 0;
+  u32 running_average_count = 0;
   int timer_id = -1;
   while (1) {
-    int start_time = interrupts_timer_ticks();
+    int start_time = timer_get_ticks(dev_timer_primary);
     int off = 0;
     for (int i = 0; i < 200; i++) {
       for (int j = 0; j < 320; j++) {
@@ -83,12 +87,12 @@ void mode13h_test() {
     }
     count++;
     frame++;
-    interrupts_watchdog_reset();
-    int end_time = interrupts_timer_ticks();
+    timer_watchdog_reset(dev_timer_primary);
+    int end_time = timer_get_ticks(dev_timer_primary);
     int time = end_time - start_time;
     running_average += time;
     running_average_count++;
-    unsigned int print_running_average(unsigned int ticks) {
+    u32 print_running_average(u32 ticks) {
       if (running_average_count == 0) {
         return ticks * 2;
       }
@@ -99,7 +103,7 @@ void mode13h_test() {
       return ticks;
     }
     if (timer_id < 0) {
-      timer_id = interrupts_register_timer_callback(print_running_average, 500);
+      timer_id = timer_register_callback(dev_timer_primary, print_running_average, 500);
     }
   }
   printf("VGA mode 13h enabled\n");
@@ -108,7 +112,7 @@ void mode13h_test() {
 void print_io(int port) { printf("Port 0x%X: 0x%X\n", port, inb(port)); }
 
 int detect_shadowing(int address, int msg) {
-  volatile unsigned int *check = (void *)address;
+  volatile u32 *check = (void *)address;
   int orig = *check;
   *check = 0x0;
   int result;
@@ -130,18 +134,19 @@ int detect_shadowing(int address, int msg) {
 void chipset_explore();
 
 // TODO I think this is clobbering ram
-void handover_from_hd(int offset) {
+void handover_from_hd(int offset, ata_drive* drive) {
   printf("Loading to 0x80000 with soft handover to shadow rom at 0xF0000...\n");
   int read_sectors = 65536 / 512;
   char *buffer = (char *)0x80000;
-  if (ataRead(0, offset, read_sectors, buffer) != 65536) {
+  ata_drive_select(drive->dev, drive->flags & ATA_DRIVE_SLAVE);
+  if (ata_read_lba(0, offset, read_sectors, buffer) != 65536) {
     printf("Failed to read bootstrap\n");
     return;
   }
   for (int i = 0; i < 16; i++) {
     printf("%x ", buffer[i + 0xFFF0]);
   }
-  interrupts_disable();
+  itr_disable();
   // Soft reset doesn't work because we clobbered lower memory
   // TODO, we can probably load the bootstrap to 0x7C00,
   // setup a realmode routine to copy it to 0xF0000 and then do the
@@ -204,45 +209,48 @@ int find_bootstrap_partition(char* MBR) {
   return partition_offsets[bootstrap_partition];
 }
 
-bool boot_from_hd() {
-  char* bootsector = (char*)0x7C00;
-  if (ataRead(0, 0, 1, bootsector) != 512) {
-    printf("Failed to read MBR\n");
-    return false;
+void boot_from_hd(ata_drive* drive) {
+  if (drive->dev) {
+    ata_drive_select(drive->dev, drive->flags & ATA_DRIVE_SLAVE);
+    msleep(2);
+    char* bootsector = (char*)0x7C00;
+    if (ata_read_lba(drive->dev, 0, 1, bootsector) != 512) {
+      printf("Failed to read MBR\n");
+      return;
+    }
+    // Look for bootsector signature
+    if (bootsector[510] != 0x55 || bootsector[511] != 0xAA) {
+      printf("Invalid MBR signature\n");
+      return;
+    }
+    vgaCls();
+    set_vga_enabled(0);
+    // Call real mode routine to jump into bootsector
+    real_mode_call_params params = {
+        .segment = 0x0,
+        .offset = 0x7C00,
+        .dx = 0x0080,
+    };
+    real_mode_call(&params);
+    printf("Boot from HD failed\n");
   }
-  // Look for bootsector signature
-  if (bootsector[510] != 0x55 || bootsector[511] != 0xAA) {
-    printf("Invalid MBR signature\n");
-    return false;
-  }
-  vgaCls();
-  set_vga_enabled(0);
-  // Call real mode routine to jump into bootsector
-  real_mode_call_params params = {
-      .segment = 0x0,
-      .offset = 0x7C00,
-      .dx = 0x0080,
-  };
-  real_mode_call(&params);
-  printf("Boot from HD failed\n");
-  return false;
 }
 
-bool oprom_exists(unsigned char *oprom) {
+bool oprom_exists(u8 *oprom) {
   if (oprom[0] != 0x55 || oprom[1] != 0xAA) {
-    printf("Invalid oprom signature\n");
+    //printf("Invalid oprom signature\n");
     return false;
   }
   return true;
 }
 
-bool oprom_checksum_valid(unsigned char *oprom) {
-  unsigned int size = oprom[2] * 512;
+bool oprom_checksum_valid(u8 *oprom) {
+  u32 size = oprom[2] * 512;
   if (size > 0x40000) {
     return false;
   }
-  unsigned int checksum = 0;
-  for (unsigned int i = 0; i < size; i++) {
+  u32 checksum = 0;
+  for (u32 i = 0; i < size; i++) {
     checksum += oprom[i];
   }
   if ((checksum & 0xFF) == 0) {
@@ -253,17 +261,51 @@ bool oprom_checksum_valid(unsigned char *oprom) {
   }
 }
 
-bool oprom_valid(unsigned char *oprom) {
+bool oprom_valid(u8 *oprom) {
   return oprom_exists(oprom) && oprom_checksum_valid(oprom);
 }
 
-bool call_oprom(unsigned char *oprom) {
+bool call_oprom(u8 *oprom) {
   real_mode_call_params params = {
       .segment = (int)oprom >> 4,
       .offset = 3,
   };
   real_mode_call(&params);
   return true;
+}
+
+
+dev_ata* dev_ata_primary;
+dev_ata* dev_ata_secondary;
+void hd_init() {
+  int num_drives = 0;
+  ata_drive* drive = (&dev_ata_drives[0]);
+  void scan_dev(dev_ata* ata) {
+    printf("Master: ");
+    if (ata_identify(ata, false, drive)) {
+      drive = (&dev_ata_drives[++num_drives]);
+    }
+    printf("Slave: ");
+    if (ata_identify(ata, true, drive)) {
+      drive = (&dev_ata_drives[++num_drives]);
+    }
+  }
+  printf("Scanning primary ATA Channel...");
+  dev_ata_primary = ata_init(0x1F0, IRQ14);
+  if (dev_ata_primary) {
+    printf(" Found\n");
+    scan_dev(dev_ata_primary);
+  } else {
+    printf(" Not found\n");
+  }
+  printf("Scanning secondary ATA Channel...");
+  dev_ata_secondary = ata_init(0x170, IRQ15);
+  if (dev_ata_secondary) {
+    printf(" Found\n");
+    scan_dev(dev_ata_secondary);
+  } else {
+    printf(" Not found\n");
+  }
 }
 
 void main() {
@@ -280,9 +322,13 @@ void main() {
 #ifdef ENABLE_SERIAL
   bool serial_enabled = serial_init(115200);
 #endif
-  if (oprom_valid((unsigned char *)0xC0000)) {
+  chipset_post();
+#ifdef ENABLE_PCI
+  pci_configure();
+#endif
+  if (oprom_valid((u8 *)0xC0000)) {
     printf("Found VGA BIOS, Calling\n");
-    call_oprom((unsigned char *)0xC0000);
+    call_oprom((u8 *)0xC0000);
     set_vga_enabled(1);
     postCode(0x13);
     vgaCls();
@@ -290,10 +336,9 @@ void main() {
     printf("Could not find VGA BIOS\n");
     set_vga_enabled(0);
   }
-  chipset_post();
   vgaSetCursor(0, 0);
   printf("EklecTech BIOS %s. by Doug Johnson (%s) running backend %s\n",
-         "v0.1apre", "2024", CHIPSET_NAME);
+         "v0.1a", "2024", CHIPSET_NAME);
 #ifdef ENABLE_SERIAL
   if (serial_enabled) {
     printf("Serial port enabled, COM1 115200\n");
@@ -312,23 +357,22 @@ void main() {
   postCode(0x15);
   doPost();
   postCode(0x16);
-#ifdef ENABLE_PCI
-  pci_configure();
-#endif
+  itr_init();
   postCode(0x17);
-  interrupts_init();
+  dev_timer_primary = timer_init(0x40, IRQ0, 1000);
   serial_set_buffered(1);
   postCode(0x18);
-  ataInit();
-  // probe_io_ports();
-  // find_boundary_signatures();
-  // chipset_explore();
-  // fuzz_io_port(0x22, 0x23, 0);
+  keyboard_init();
   postCode(0x19);
-  interrupts_enable();
+  hd_init();
+  postCode(0x1A);
+  bios_init();
+  postCode(0x1B);
+  itr_enable();
+  postCode(0x1C);
   // mode13h_test();
   detect_shadowing(0xFFFF0000, 1);
-  bool __attribute__((unused)) rom_region_writable =
+  bool unused rom_region_writable =
     detect_shadowing(0xF0000, 1);
   detect_shadowing(0xC0000, 1);
   detect_shadowing(0xE0000, 1);
@@ -341,22 +385,23 @@ void main() {
   // interrupts_enable_watchdog();
   // interrupts_enable();*/
   // chipset_explore_lower_addr();
+  postCode(0x1D);
   printf("Done\n");
-  bool success = boot_from_hd();
-  if (!success) {
-    printf("Failed to boot from HD\n");
+  for (int i = 0; i < 4; i++) {
+    boot_from_hd(&dev_ata_drives[i]);
   }
+  printf("Failed to boot\n");
   while (1) {
     asm("hlt");
   }
   // If we are here we failed to bootstrap from HD
-  interrupts_disable();
+  itr_disable();
   // See if we can get into vga 13h mode
   real_mode_int(&(real_mode_int_params){
       .int_num = 0x10,
       .ax = 0x13,
   });
-  interrupts_enable();
+  itr_enable();
   void (*mode13h_test_lower_addr)(void) = shadowed_call(mode13h_test);
   mode13h_test_lower_addr();
 

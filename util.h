@@ -1,39 +1,41 @@
 #ifndef UTIL_H
 #define UTIL_H
 #include "types.h"
-#include "interrupts.h"
+#include "interrupt.h"
+#include "timer.h"
+#include "dev.h"
 
 typedef struct {
-  word segment;
-  word offset;
-  word ax, bx, cx, dx, si, di;
+  u16 segment;
+  u16 offset;
+  u16 ax, bx, cx, dx, si, di;
 } real_mode_call_params;
 
 void real_mode_call(real_mode_call_params* params);
 
 typedef struct {
-  byte int_num;
-  word ax, bx, cx, dx, si;
+  u8 int_num;
+  u16 ax, bx, cx, dx, si;
 } real_mode_int_params;
 
-static void memcpy(void* dest, void* src, dword len) {
+static void memcpy(void* dest, void* src, u32 len) {
   if ((len & 3) == 0) {
-    dword* d = (dword*)dest;
-    dword* s = (dword*)src;
+    u32* d = (u32*)dest;
+    u32* s = (u32*)src;
     while (len > 0) {
       *d++ = *s++;
       len -= 4;
     }
   } else if ((len & 2) == 0) {
-    word* d = (word*)dest;
-    word* s = (word*)src;
+    u16* d = (u16*)dest;
+    u16* s = (u16*)src;
     while (len > 0) {
       *d++ = *s++;
       len -= 2;
     }
   } else {
-    byte* d = (byte*)dest;
-    byte* s = (byte*)src;
+    u8* d = (u8*)dest;
+    u8* s = (u8*)src;
     while (len > 0) {
       *d++ = *s++;
       len--;
@@ -55,9 +57,9 @@ void soft_reset();
   asm("ud2"); \
 }
 
-static void msleep(dword ms) {
-  unsigned int start = interrupts_timer_ticks();
-  while ((interrupts_timer_ticks() - start) < ms) {
+static void msleep(u32 ms) {
+  unsigned int start = timer_get_ticks(dev_timer_primary);
+  while ((timer_get_ticks(dev_timer_primary) - start) < ms) {
     asm("hlt");
   }
 }

@@ -10,7 +10,7 @@ global install_ivt
 extern serial_write_string
 extern serial_write_byte
 extern serial_write_hex
-extern interrupts_real_mode_interrupt
+extern itr_real_mode_interrupt
 
 fill_dummy_ivt:
     xor bx, bx
@@ -49,14 +49,23 @@ print_handler:
     iret
 
 trampoline_to_32:
-    mov al, bl
-    out 0x80, al
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push bp
+    push ds
+    push es
+    push sp
+    push ss
+    push ax ; Has the interrupt number top of stack
     mov eax, ret
     jmp 0xF000:0xFF70
 ret:
 BITS 32
-    call interrupts_real_mode_interrupt
-    xchg bx, bx
+    call itr_real_mode_interrupt-0xFFF00000 ; keep it in lower so it can handle
+    ; gate a20 save/restore
     pop bx ; throw away the interrupt number
     xor ecx, ecx
     pop cx ; this will be the new ss
@@ -91,19 +100,7 @@ BITS 16
 %macro interrupt_handler 1
 int%1:
     push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    push bp
-    push ds
-    push es
-    push sp
-    push ss
-    mov bx, %1
-    push bx
-    xchg bx, bx
+    mov ax, %1
     jmp word trampoline_to_32
 %endmacro
 

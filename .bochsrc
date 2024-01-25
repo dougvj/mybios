@@ -5,6 +5,7 @@ display_library: x, options = "gui_debug"
 memory: host=32, guest=16
 romimage: file="./bios.bin", address=0x0, options=none
 #romimage: file="/usr/share/qemu/bios.bin", address=0x0, options=none
+#romimage: file="/home/dougvj/Downloads/NAKI0114.AWD", address=0x0, options=none
 #vgaromimage: file="/home/dougvj/archive/bios_dump/video2.bin"
 #vgaromimage: file="/usr/share/qemu/vgabios-isavga.bin"
 vgaromimage: file=$BXSHARE/VGABIOS-lgpl-latest-cirrus
@@ -13,7 +14,7 @@ floppy_bootsig_check: disabled=0
 # no floppya
 # no floppyb
 ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
-ata0-master: type=disk, path="/home/dougvj/image.dd"
+ata0-master: type=disk, path="bochs.img"
 ata0-slave: type=none
 ata1: enabled=1, ioaddr1=0x170, ioaddr2=0x370, irq=15
 ata1-master: type=none
@@ -28,14 +29,14 @@ optramimage1: file=none
 optramimage2: file=none
 optramimage3: file=none
 optramimage4: file=none
-#pci: enabled=1, chipset=i440fx, slot1=pcivga, slot2=ne2k
+pci: enabled=1, chipset=i440fx, slot1=pcivga, slot2=ne2k
 #vga: extension=vbe, update_freq=5, realtime=1
 vga: extension=cirrus, update_freq=5, realtime=1
 cpu: count=1:1:1, ips=10000000, model=pentium, reset_on_triple_fault=0, cpuid_limit_winnt=0, ignore_bad_msrs=1, mwait_is_nop=0
 print_timestamps: enabled=0
 debugger_log: -
 debug_symbols: file="bios.sym"
-magic_break: enabled=1
+#magic_break: enabled=1
 port_e9_hack: enabled=1
 private_colormap: enabled=0
 clock: sync=none, time0=local, rtc_sync=0
@@ -43,9 +44,9 @@ clock: sync=none, time0=local, rtc_sync=0
 # no loader
 log: -
 logprefix: %t%e%d
-# debug: action=report
+debug: action=report
 debug: action=ignore
-info: action=report
+#info: action=report
 error: action=report
 panic: action=ask
 keyboard: type=mf, serial_delay=250, paste_delay=100000, user_shortcut=none

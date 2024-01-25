@@ -3,7 +3,6 @@ ORG 0xFFF70
 %include "pcode.asm"
 protect:
     push eax
-    cli
     mov ax, 0xF000
     mov ds, ax
     lgdt[gdtr] ; ld doesn't like truncating this

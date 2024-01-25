@@ -1,0 +1,220 @@
+#include "bios.h"
+#include "interrupt.h"
+#include "io.h"
+#include "output.h"
+#include "keyboard.h"
+#include "ata.h"
+#include "dev.h"
+
+void bios_handle_disk_interrupt(u8 vector, itr_frame_real_mode* frame, void* data) {
+      printf("Got disk interrupt: %x\n", vector);
+      switch(frame->ax >> 8) {
+        case 0x8: {
+          int drive = GET_L(frame->dx);
+          printf("Got get disk parameters for %x \n", drive);
+          if (drive == 0x80) {
+            ata_drive* info = &dev_ata_drives[0];
+            u8 sectors_per_track = info->sectors;
+            u8 heads = info->heads;
+            u32 cylinders = info->cylinders;
+            printf("Cylinders: %d\n", cylinders);
+            printf("Heads: %d\n", heads);
+            printf("Sectors per track: %d\n", sectors_per_track);
+            SET_H(frame->ax, 0x00);
+            SET_H(frame->cx, cylinders & 0xFF);
+            SET_L(frame->cx, sectors_per_track | ((cylinders >> 8) & 0x3) << 6);
+            SET_H(frame->dx, heads);
+            SET_L(frame->dx, 1);
+            printf("ax: %x\n", frame->ax);
+            printf("cx: %x\n", frame->cx);
+            printf("dx: %x\n", frame->dx);
+            frame->flags &= 0xFFFE;
+          } else {
+            printf("Drive %x not found\n", drive);
+            frame->flags |= 0x1;
+            SET_H(frame->ax, 0x01);
+          }
+        } break;
+        case 0x2: {
+          int drive = GET_L(frame->dx);
+          if (drive == 0x80) {
+            ata_drive* info = &dev_ata_drives[0];
+            printf("Got read disk sectors\n");
+            printf("ax: %x\n", frame->ax);
+            printf("cx: %x\n", frame->cx);
+            printf("dx: %x\n", frame->dx);
+            int num_sectors = GET_L(frame->ax);
+            int cylinder = GET_H(frame->cx) | ((u32)(GET_L(frame->cx) & 0xC0) << 2);
+            int head = GET_H(frame->dx);
+            int sector = GET_L(frame->cx) & 0x3F;
+            printf("Reading %d sectors from drive %d, cylinder %d, head %d, sector %d\n", num_sectors, drive, cylinder, head, sector);
+            char* dest = (char*)((u32)(frame->es <<4) + frame->bx);
+            if (info->flags & ATA_DRIVE_LBA28) {
+              printf("Using LBA28\n");
+              u32 lba = (cylinder * (info->heads + 1) + head) * info->sectors + sector - 1;
+              printf("LBA: %x\n", lba);
+              printf("dest: 0x%x\n", dest);
+              ata_read_lba(info->dev, lba, num_sectors, dest);
+            } else {
+              printf("Using CHS\n");
+              printf("dest: 0x%x\n", dest);
+              ata_read_chs(info->dev, cylinder, head, sector, num_sectors, dest);
+            }
+            // clear carry flag
+            frame->flags &= 0xFFFE;
+            SET_L(frame->ax, num_sectors);
+          }
+        } break;
+        case 0x0:
+          printf("Got reset disk system\n");
+          // Just assume it worked
+          frame->flags &= 0xFFFE;
+          SET_L(frame->ax, 0x00);
+          break;
+        default:
+          printf("Got unknown disk interrupt: %x\n", frame->ax >> 8);
+          SET_L(frame->ax, 0x01);
+          frame->flags |= 0x1;
+          break;
+      }
+}
+
+void bios_handle_keyboard_interrupt(u8 vector, itr_frame_real_mode* frame, void* data) {
+      //printf("Got keyboard interrupt: %x\n", vector);
+      switch(GET_H(frame->ax)) {
+        case 0x1:
+        case 0x11:
+          printf("Got keyboard check\n");
+          if (keyboard_available()) {
+            frame->flags &= ~0x40;
+            u8 scancode = keyboard_get_scancode();
+            SET_H(frame->ax, scancode);
+            u8 ascii = keyboard_map(scancode);
+            SET_L(frame->ax, ascii);
+          } else {
+            frame->flags |= 0x40;
+            SET_L(frame->ax, 0x00);
+          }
+          break;
+        case 0x0:
+        case 0x10:
+          printf("Got keyboard read\n");
+          while (!keyboard_available());
+          u8 scancode = keyboard_pop_scancode();
+          SET_H(frame->ax, scancode);
+          u8 ascii = keyboard_map(scancode);
+          SET_L(frame->ax, ascii);
+          break;
+        case 0x2:
+          printf("Get shift flags\n");
+          //SET_L(frame->ax, 0x10);
+          frame->ax = 0x00;
+          break;
+        default:
+          printf("Unhandled KB %x\n", GET_H(frame->ax));
+          while (1) {
+            asm volatile("hlt");
+          }
+          break;
+      }
+}
+
+void bios_handle_memory_size_interrupt(u8 vector, itr_frame_real_mode* frame, void* data) {
+  printf("Got memory size interrupt: %x\n", vector);
+  frame->ax= 512;
+}
+
+void bios_handle_get_system_time(u8 vector, itr_frame_real_mode* frame, void* data) {
+ // printf("Got system time interrupt: %x\n", vector);
+  frame->cx = 0x0;
+  frame->dx = 0x0;
+  frame->flags &= 0xFFFE;
+}
+
+void bios_handle_get_equipment_list(u8 vector, itr_frame_real_mode* frame, void* data) {
+  printf("Got equipment list interrupt: %x\n", vector);
+  int num_floppies = 0;
+  int math_coprocessor = 1;
+  int initial_video_mode = 0x10;
+  int num_serial_ports = 2;
+  int game_port = 0;
+  int num_parallel_ports = 1;
+  frame->ax = (num_floppies ? 1 : 0) |
+      (math_coprocessor << 1) | (initial_video_mode << 4) |
+      (num_serial_ports << 9) | (game_port << 12) | (num_parallel_ports << 14);
+}
+
+void bios_handle_serial_port(u8 vector, itr_frame_real_mode* frame, void* data) {
+  printf("Got serial port interrupt: %x\n", vector);
+  switch (GET_L(frame->ax)) {
+    case 0x0:
+      printf("Got serial port reset\n");
+      frame->flags &= 0xFFFE;
+      break;
+    case 0x1:
+      printf("Got serial port initialize\n");
+      frame->flags &= 0xFFFE;
+      break;
+    case 0x2:
+      printf("Got serial port send\n");
+      frame->flags &= 0xFFFE;
+      break;
+    case 0x3:
+      printf("Got serial port receive\n");
+      frame->flags &= 0xFFFE;
+      break;
+    case 0x4:
+      printf("Got serial port status\n");
+      frame->flags &= 0xFFFE;
+      break;
+    default:
+      printf("Got unknown serial port interrupt: 0x%x\n", frame->ax);
+      frame->flags |= 0x1;
+      break;
+  }
+}
+
+void bios_handle_int15(u8 vector, itr_frame_real_mode* frame, void* data) {
+  printf("Got int15 interrupt: %x\n", vector);
+  switch (GET_H(frame->ax)) {
+    case 0x88:
+      printf("Got int15 get extended memory size\n");
+      frame->flags &= 0xFFFE;
+      // TODO setup a parmaeter table<
+      SET_L(frame->ax, 0x700000);
+      break;
+    case 0x24:
+      switch(GET_L(frame->ax)) {
+        case 0x0:
+          // Disable A20
+          printf("Got int15 disable A20\n");
+          frame->flags &= 0xFFFE;
+          break;
+        case 0x3:
+          // Query support
+          printf("Got int15 query A20\n");
+          frame->flags &= 0xFFFE;
+          frame->bx = 0;
+      }
+      break;
+    case 0xC0:
+      printf("Got int15 get system configuration\n");
+      frame->flags |= 0x1;
+      break;
+    default:
+      printf("Got unknown int15 interrupt: 0x%x\n", frame->ax);
+      frame->flags |= 0x1;
+      break;
+  }
+}
+
+void bios_init() {
+  printf("Installing real mode interrupt handlers\n");
+  itr_set_real_mode_handler(0x13, bios_handle_disk_interrupt, NULL);
+  itr_set_real_mode_handler(0x16, bios_handle_keyboard_interrupt, NULL);
+  itr_set_real_mode_handler(0x11, bios_handle_get_equipment_list, NULL);
+  itr_set_real_mode_handler(0x12, bios_handle_memory_size_interrupt, NULL);
+  itr_set_real_mode_handler(0x1a, bios_handle_get_system_time, NULL);
+  itr_set_real_mode_handler(0x14, bios_handle_serial_port, NULL);
+  itr_set_real_mode_handler(0x15, bios_handle_int15, NULL);
+}

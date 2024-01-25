@@ -3,10 +3,12 @@ OUTPUT("bios.bin")
 OUTPUT_ARCH("i386");
 ENTRY("reset_vector")
 
-/* Define the size of the ROM */
-#define ROM_SIZE 64k
-
+#ifdef STAY_IN_LOW_MEMORY
+#define ROM_START 0x100000 - ROM_SIZE
+#else
 #define ROM_START 0x100000000 - ROM_SIZE
+#endif
+
 MEMORY
 {
     RAM (rw) : ORIGIN = 0x90000, LENGTH = 64K

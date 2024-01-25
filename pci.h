@@ -3,28 +3,28 @@
 #include "output.h"
 #include "types.h"
 
-dword pci_type2_config_address(byte bus, byte device, byte function, byte offset);
-dword pci_type2_config_read(dword base_config_address, byte offset);
-void pci_type2_config_write(dword base_config_address, byte offset, dword data);
+u32 pci_type2_config_address(u8 bus, u8 device, u8 function, u8 offset);
+u32 pci_type2_config_read(u32 base_config_address, u8 offset);
+void pci_type2_config_write(u32 base_config_address, u8 offset, u32 data);
 
 typedef struct {
-  dword base_config_address;
-  byte bus;
-  byte device;
-  byte func;
-  word vendor_id;
-  word device_id;
-  word status;
-  word command;
-  byte class;
-  byte subclass;
-  byte prog_if;
-  byte revision;
-  byte bist;
-  byte header_type;
-  byte latency_timer;
-  byte cache_line_size;
-  dword bar_size;
+  u32 base_config_address;
+  u8 bus;
+  u8 device;
+  u8 func;
+  u16 vendor_id;
+  u16 device_id;
+  u16 status;
+  u16 command;
+  u8 class;
+  u8 subclass;
+  u8 prog_if;
+  u8 revision;
+  u8 bist;
+  u8 header_type;
+  u8 latency_timer;
+  u8 cache_line_size;
+  u32 bar_size;
 } pci_device;
 
 enum pci_header_type {
@@ -90,16 +90,21 @@ enum pci_config_registers {
 };
 
 void pci_configure();
-dword pci_config_read(pci_device *device, byte offset);
-void pci_config_write(pci_device *device, byte offset, dword data);
-dword query_bar_size(pci_device *device, byte bar);
-void pci_map_bar(pci_device *device, byte bar, dword address);
+u32 pci_config_read(pci_device *device, u8 offset);
+void pci_config_write(pci_device *device, u8 offset, u32 data);
+u16 pci_config_readw(pci_device *device, u8 offset);
+void pci_config_writew(pci_device *device, u8 offset, u16 data);
+u8 pci_config_readb(pci_device *device, u8 offset);
+void pci_config_writeb(pci_device *device, u8 offset, u8 data);
+
+u32 query_bar_size(pci_device *device, u8 bar);
+void pci_map_bar(pci_device *device, u8 bar, u32 address);
 void pci_enable_bus_mastering(pci_device *device);
 void pci_enable_io(pci_device *device);
 void pci_enable_memory(pci_device *device);
 
-pci_device* pci_get_device(byte bus, byte device);
-pci_device* pci_find_device(word vendor_id, word device_id, byte index);
+pci_device* pci_get_device(u8 bus, u8 device);
+pci_device* pci_find_device(u16 vendor_id, u16 device_id, u8 index);
 
 void pci_device_free(pci_device* device);
 

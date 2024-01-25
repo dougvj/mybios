@@ -3,9 +3,9 @@
 #include "post.h"
 #include "postcode.h"
 
-static void writeReg(char reg, char byte) {
+static void writeReg(char reg, char u8) {
     outb(0x22, reg);
-    outb(0x23, byte);
+    outb(0x23, u8);
 }
 
 static unsigned char readReg(char reg) {
@@ -182,16 +182,16 @@ bool chipset_has_pci() {
   return false;
 }
 
-dword chipset_pci_config_read(dword base_config_ddress, dword offset) {
+u32 chipset_pci_config_read(u32 base_config_ddress, u32 offset) {
   return 0;
 }
 
-void chipset_pci_config_write(dword base_config_ddress, dword offset, dword value) {
+void chipset_pci_config_write(u32 base_config_ddress, u32 offset, u32 value) {
 }
 
-dword chipset_pci_config_address(byte bus, byte dev, byte func, byte offset) {
+u32 chipset_pci_config_address(u8 bus, u8 dev, u8 func, u8 offset) {
   return 0;
 }
 
-void chipset_shadow_rom_from_src(dword address, dword size, dword src) {
+void chipset_shadow_rom_from_src(u32 address, u32 size, u32 src) {
 }

@@ -1,6 +1,6 @@
 #include "chipset.h"
 #include "util.h"
-#include "interrupts.h"
+#include "interrupt.h"
 #include "debug.h"
 #include "output.h"
 
@@ -50,7 +50,7 @@ void real_mode_call(real_mode_call_params* params)
       "m"(params->segment), "m"(params->offset)
       : "ebx", "ecx", "edx", "esi", "edi"
       );
-  interrupts_reload_idt();
+  itr_reload_idt();
 }
 
 extern void call_int();
@@ -59,9 +59,9 @@ extern void call_int();
 //
 // maybe should use a stack param?
 void real_mode_int(real_mode_int_params* params) {
-  word segment = 0xF000;
+  u16 segment = 0xF000;
   // Found in interrupt.asm
-  word offset = (dword)(call_int) & 0xFFFF;
+  u16 offset = (u32)(call_int) & 0xFFFF;
   asm(
       call_real_mode_asm()
       :
@@ -73,5 +73,5 @@ void real_mode_int(real_mode_int_params* params) {
       "m"(segment), "m"(offset)
       : "ebx", "ecx", "edx", "esi", "edi"
       );
-  interrupts_reload_idt();
+  itr_reload_idt();
 }

@@ -6,6 +6,7 @@
 #include "ata.h"
 #include "dev.h"
 
+
 void bios_handle_disk_interrupt(u8 vector, itr_frame_real_mode* frame, void* data) {
       printf("Got disk interrupt: %x\n", vector);
       switch(frame->ax >> 8) {
@@ -39,10 +40,10 @@ void bios_handle_disk_interrupt(u8 vector, itr_frame_real_mode* frame, void* dat
           int drive = GET_L(frame->dx);
           if (drive == 0x80) {
             ata_drive* info = &dev_ata_drives[0];
-            printf("Got read disk sectors\n");
+            /*printf("Got read disk sectors\n");
             printf("ax: %x\n", frame->ax);
             printf("cx: %x\n", frame->cx);
-            printf("dx: %x\n", frame->dx);
+            printf("dx: %x\n", frame->dx);*/
             int num_sectors = GET_L(frame->ax);
             int cylinder = GET_H(frame->cx) | ((u32)(GET_L(frame->cx) & 0xC0) << 2);
             int head = GET_H(frame->dx);
@@ -50,14 +51,9 @@ void bios_handle_disk_interrupt(u8 vector, itr_frame_real_mode* frame, void* dat
             printf("Reading %d sectors from drive %d, cylinder %d, head %d, sector %d\n", num_sectors, drive, cylinder, head, sector);
             char* dest = (char*)((u32)(frame->es <<4) + frame->bx);
             if (info->flags & ATA_DRIVE_LBA28) {
-              printf("Using LBA28\n");
               u32 lba = (cylinder * (info->heads + 1) + head) * info->sectors + sector - 1;
-              printf("LBA: %x\n", lba);
-              printf("dest: 0x%x\n", dest);
               ata_read_lba(info->dev, lba, num_sectors, dest);
             } else {
-              printf("Using CHS\n");
-              printf("dest: 0x%x\n", dest);
               ata_read_chs(info->dev, cylinder, head, sector, num_sectors, dest);
             }
             // clear carry flag

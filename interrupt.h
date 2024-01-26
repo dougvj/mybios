@@ -8,6 +8,7 @@ void itr_enable(void);
 void itr_disable(void);
 
 typedef struct {
+  // TODO add full state
   u32 ip;
   u32 cs;
   u32 flags;
@@ -15,8 +16,8 @@ typedef struct {
   u32 ss;
 } packed itr_frame;
 
-enum itr_number_vectors {
-  IRQ0 = 32,
+enum itr_irq {
+  IRQ0 = 0,
   IRQ1,
   IRQ2,
   IRQ3,
@@ -33,6 +34,12 @@ enum itr_number_vectors {
   IRQ14,
   IRQ15
 };
+
+
+typedef void (*itr_handler_irq)(enum itr_irq irq, void* data);
+
+void itr_set_irq_handler(enum itr_irq irq, itr_handler_irq handler, void *data);
+void itr_clear_irq_handler(enum itr_irq irq);
 
 typedef void (*itr_handler)(u8 vector, itr_frame *frame, void* data);
 

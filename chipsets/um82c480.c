@@ -174,7 +174,6 @@ void chipset_init() {
       }
     }
   }
-
   writeReg480(0x9a, best_config);
   memcpy((void *)0x60000, (void *)0xf0000, 0x10000);
   writeReg480(0x9b, 0x02); // Shadow 0xf0000
@@ -269,8 +268,6 @@ void chipset_explore() {
     regs[i] = readReg206(i);
     regs2[i] = readReg480(i);
   }
-  int (*probeSpeedLower)() = shadowed_call(probeSpeed);
-  int (*probeMemSpeedLower)() = shadowed_call(probeMemSpeed);
   // OK let's try to toggle different bits and see if our performanc changes.
   //
   // This assumes already that we have dram configured and shadowing enabled
@@ -280,9 +277,9 @@ void chipset_explore() {
   int toggle_mode = 1;
   // int resume = cmos_read(0x16);
   printf("Sentinel location: %x\n", &sentinel);
-  int orig_speed = probeSpeedLower();
+  int orig_speed = probeSpeed();
   printf("Orig Speed: %d\n", orig_speed);
-  int mem_speed = probeMemSpeedLower();
+  int mem_speed = probeMemSpeed();
   printf("Orig Mem Speed: %d\n", mem_speed);
   // Frequencies of major scale
   int freq_scale[] = {130, 146, 164, 174, 196, 220, 246, 261};
@@ -338,7 +335,7 @@ void chipset_explore() {
       printf("Found sentinel at %x which is a shift of %d\n", mem,
              mem - (char *)sentinel);
     } else {
-      int new_speed = probeSpeedLower();
+      int new_speed = probeSpeed();
       printf("New speed: %d\n", new_speed);
       if (abs(new_speed - orig_speed) > 100) {
         printf("Bit %d is a performance change of %i\n", j,

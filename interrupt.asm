@@ -11,6 +11,7 @@ extern serial_write_string
 extern serial_write_byte
 extern serial_write_hex
 extern itr_real_mode_interrupt
+extern itr_reload_idt
 
 fill_dummy_ivt:
     xor bx, bx
@@ -22,6 +23,9 @@ fill_dummy_ivt:
     add eax, int1-int0
     cmp bx, cx
     jl .loop
+    ; Ignore timer interrupt to see if our problems go away
+    mov bx, 32
+    call install_ivt
     ret
 
 
@@ -49,6 +53,7 @@ print_handler:
     iret
 
 trampoline_to_32:
+    ;xchg bx, bx
     push bx
     push cx
     push dx
@@ -64,8 +69,10 @@ trampoline_to_32:
     jmp 0xF000:0xFF70
 ret:
 BITS 32
-    call itr_real_mode_interrupt-0xFFF00000 ; keep it in lower so it can handle
-    ; gate a20 save/restore
+    call itr_real_mode_interrupt
+    ;cli
+    ; Restore real mode idt
+    lidt [real_mode_idt]
     pop bx ; throw away the interrupt number
     xor ecx, ecx
     pop cx ; this will be the new ss
@@ -95,15 +102,16 @@ BITS 16
     pop cx
     pop bx
     pop ax
+    ;xchg bx, bx
     iret
 
 %macro interrupt_handler 1
 int%1:
+    cli
     push ax
     mov ax, %1
     jmp word trampoline_to_32
 %endmacro
-
 
 %assign i 0
 %rep 256
@@ -141,3 +149,6 @@ call_int:
     call far [ds:di]
     pop ds
     retf
+real_mode_idt:
+    dw 0x3FF, 0x0
+    dd 0x0

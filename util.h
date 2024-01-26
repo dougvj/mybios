@@ -43,8 +43,8 @@ static void memcpy(void* dest, void* src, u32 len) {
   }
 }
 
-static void* shadowed_call(void* func) {
-  return func - 0xFFF00000;
+static void* unshadowed_call(void* func) {
+  return func + 0xFFF00000;
 }
 
 void real_mode_int(real_mode_int_params* params);
@@ -57,9 +57,12 @@ void soft_reset();
   asm("ud2"); \
 }
 
+#include "output.h"
+
 static void msleep(u32 ms) {
+  u32 ticks = ms / 55;
   unsigned int start = timer_get_ticks(dev_timer_primary);
-  while ((timer_get_ticks(dev_timer_primary) - start) < ms) {
+  while ((timer_get_ticks(dev_timer_primary) - start) < ticks) {
     asm("hlt");
   }
 }

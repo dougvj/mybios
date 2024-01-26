@@ -14,6 +14,7 @@ CFLAGS=-fno-stack-protector \
 			 -fno-exceptions \
 			 -Wno-unused-parameter \
 			 -Wno-unused-function \
+			 -Wno-array-bounds \
 			 -funsigned-char \
 			 -Wall \
 			 -Wextra \
@@ -21,10 +22,10 @@ CFLAGS=-fno-stack-protector \
 
 CFLAGS += -Werror
 CC=gcc
-CHIPSET=440fx
+#CHIPSET=440fx
 #CHIPSET=null
 #CHIPSET=sis8c460
-#CHIPSET=um82c480
+CHIPSET=um82c480
 C_SRC = $(wildcard *.c)
 ASM_SRC = $(wildcard *.asm)
 ASM_BLOB_SRC = $(wildcard *.S)
@@ -34,15 +35,15 @@ ASM_BLOBS = $(ASM_BLOB_SRC:%.S=%_S.bin)
 
 all: bios.bin
 
-ROM_SIZE=64K
+ROM_SIZE=64k
 
 DEFINES=
-DEFINES += -DBOCHS
+#DEFINES += -DBOCHS
 #DEFINES += -DDEBUG
-#DEFINES += -DENABLE_SERIAL
-#DEFINES += -DENABLE_EARLY_SERIAL
+DEFINES += -DENABLE_SERIAL
+#DEFINES += -DENABLE_EARLY_SERIA
 #DEFINES += -DENABLE_EARLY_VIDEO
-DEFINES += -DENABLE_PCI
+#DEFINES += -DENABLE_PCI
 CFLAGS += $(DEFINES)
 ASMFLAGS += $(DEFINES)
 

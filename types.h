@@ -15,6 +15,7 @@ typedef signed long long i64;
 #define packed __attribute__((packed))
 #define unused __attribute__((unused))
 #define noreturn __attribute__((noreturn))
+#define section(x) __attribute__((section(x)))
 #define aligned(x) __attribute__((aligned(x)))
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)

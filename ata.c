@@ -79,6 +79,7 @@ static u8 status(dev_ata *dev) { return inb(dev->base + ATA_STATUS); }
 bool ata_identify(dev_ata *dev, bool slave, ata_drive *info) {
   info->dev = NULL;
   ata_drive_select(dev,slave);
+  outb(dev->base + 0x206, 0x2);
   outb(dev->base + ATA_SECTOR_COUNT, 0);
   outb(dev->base + ATA_LBA_LO, 0);
   outb(dev->base + ATA_LBA_MID, 0);
@@ -126,6 +127,11 @@ bool ata_identify(dev_ata *dev, bool slave, ata_drive *info) {
   if (blocks > 0) {
     unsigned int size_mb = (blocks * 512) / 1024 / 1024;
     printf("LBA, %d MB", size_mb);
+    // Setup translation
+    // TODO set this by drive size
+    /*heads = 128;
+    sectors = 63;
+    cylinders = size_mb / heads / sectors;*/
   } else {
     if (ident[53] & 0x1) {
       blocks = ident[57] | (ident[58] << 16);
@@ -136,8 +142,8 @@ bool ata_identify(dev_ata *dev, bool slave, ata_drive *info) {
       unsigned int size_mb = (blocks * 512) / 1024 / 1024;
       printf("CHS(?):, %d MB", size_mb);
     }
+    printf("  %dc %dh %ds\n", cylinders, heads, sectors);
   }
-  printf("  %dc %dh %ds\n", cylinders, heads, sectors);
   info->flags = 0;
   info->flags |= lba ? ATA_DRIVE_LBA28 : 0;
   info->flags |= blocks48 > 0 ? ATA_DRIVE_LBA48 : 0;
@@ -181,7 +187,7 @@ void ata_drive_select(dev_ata *dev, bool slave) {
 }
 
 
-static void irq_handler(u8 vector, itr_frame *frame, void* data) {
+static void irq_handler(enum itr_irq irq, void* data) {
   dev_ata unused *dev = (dev_ata *)data;
   //printf("ATA Interrupt for %x\n", dev->base);
 }
@@ -204,7 +210,7 @@ dev_ata* ata_init(u32 base, u32 irq) {
   }
   dev->slave_selected = true;
   ata_drive_select(dev, false);
-  itr_set_handler(irq, irq_handler, dev);
+  itr_set_irq_handler(irq, irq_handler, dev);
   return dev;
 }
 

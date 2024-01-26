@@ -19,12 +19,11 @@ BITS 16
     push ds
     mov ax, 0xF000
     mov ds, ax
-    lidt [_idt]
+    lidt [real_mode_idt]
     pop ds
     pop eax
     push bp
     mov bp, sp
-    xchg bx, bx
     sti
     call far [ss:bp+6]
     cli
@@ -38,6 +37,6 @@ BITS 32
     sti
     pop eax
     ret
-_idt:
+real_mode_idt:
     dw 0x3FF, 0x0
     dd 0x0

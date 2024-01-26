@@ -48,7 +48,7 @@ void serial_write_unbuffered(char c) {
   serial_reg_write(DATA_REGISTER, c);
 }
 
-void serial_write_available_handler(u8 vector, itr_frame* frame, void* data) {
+void serial_write_available_handler(enum itr_irq irq, void* data) {
   // beep
   //outb(0x61, inb(0x61) | 0x03);
   if (buffered) {
@@ -69,7 +69,7 @@ void serial_set_buffered(bool b) {
   buffered = b;
   if (buffered) {
     serial_reg_write(INTERRUPT_ENABLE_REGISTER, 0x02);
-    itr_set_handler(IRQ4, serial_write_available_handler, NULL);
+    itr_set_irq_handler(IRQ4, serial_write_available_handler, NULL);
   }
   else {
     serial_reg_write(INTERRUPT_ENABLE_REGISTER, 0x00);

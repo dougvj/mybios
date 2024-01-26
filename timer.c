@@ -3,6 +3,7 @@
 #include "output.h"
 #include "interrupt.h"
 #include "util.h"
+#include "bda.h"
 
 #define MAX_TIMERS 8
 struct dev_timer {
@@ -18,20 +19,19 @@ struct dev_timer {
 
 static void check_timer_callbacks(dev_timer* timer);
 
-void handle_timer(u8 vector, itr_frame *frame, void *data) {
-  dev_timer* timer = (dev_timer*)data;
+void handle_timer(enum itr_irq irq, void* _timer) {
+  dev_timer* timer = (dev_timer*)_timer;
   if (timer->watchdog_enabled) {
     timer->watchdog_counter++;
     if (timer->watchdog_counter > 1000) {
       printf("Watchdog!\n");
-      printf("IP: 0x%x\n", frame->ip);
       asm("hlt");
     }
   }
   timer->timer_ticks++;
+  u16* bda_timer = (u16*)(0x46c);
+  (*bda_timer)++;
   check_timer_callbacks(timer);
-  // Acknowledge the interrupt
-  outb(0x20, 0x20);
 }
 
 void timer_enable_watchdog(dev_timer* timer) { timer->watchdog_enabled = 1; }
@@ -87,21 +87,22 @@ bool timer_unregister_callback(dev_timer* timer, timer_callback_id id) {
 dev_timer timer = {};
 
 
-dev_timer* timer_init(u32 base, u32 irq, u32 frequency) {
+dev_timer* timer_init(u32 base, u32 irq) {
   printf("Initializing timer\n");
   dev_timer* t = &timer;
   t->base = base;
-  t->frequency = frequency;
+  //t->frequency = frequency;
   t->watchdog_counter = 0;
   t->watchdog_enabled = 0;
   t->timer_ticks = 0;
   for (int i = 0; i < MAX_TIMERS; i++) {
     t->timer_callbacks[i] = NULL;
   }
-  u32 divisor = 1193180 / frequency;
-  outb(base + 3, 0x36);
+  //u16 divisor = 0xFFFF;
+  u16 divisor = 0x1500;
+  outb(base + 3, 0b00110100);
   outb(base, divisor & 0xFF);
-  outb(base, (divisor >> 8) & 0xFF);
-  itr_set_handler(irq, handle_timer, &timer);
+  outb(base, (divisor >> 8));
+  itr_set_irq_handler(irq, handle_timer, t);
   return t;
 }

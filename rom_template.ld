@@ -3,17 +3,22 @@ OUTPUT("bios.bin")
 OUTPUT_ARCH("i386");
 ENTRY("reset_vector")
 
-#ifdef STAY_IN_LOW_MEMORY
-#define ROM_START 0x100000 - ROM_SIZE
-#else
 #define ROM_START 0x100000000 - ROM_SIZE
+
+#ifdef LOWER_ROM_128K
+#define LOWER_ROM_START 0xE0000
+#define LOWER_ROM_SIZE 128K
+#else
+#define LOWER_ROM_START 0xF0000
+#define LOWER_ROM_SIZE 64K
 #endif
+
 
 MEMORY
 {
-    RAM (rw) : ORIGIN = 0x90000, LENGTH = 64K
-    RAM32 (rw) : ORIGIN = 0x100000, LENGTH = 64k
-    LOWER_ROM (rx) : ORIGIN = 0xF0000, LENGTH = 64K
+    RAM (rw) : ORIGIN = 0x9c000, LENGTH = 16K
+    BDA (rw) : ORIGIN = 0x400, LENGTH = 0x100
+    LOWER_ROM (rx) : ORIGIN = LOWER_ROM_START, LENGTH = LOWER_ROM_SIZE
     UPPER_ROM (rx) : ORIGIN = ROM_START, LENGTH = ROM_SIZE
 }
 
@@ -22,21 +27,21 @@ SECTIONS
     .signature ROM_START : {
         *(.signature*)
     }
-    .text .  :  {
-        *(.text*)
-    }
-    .rodata . : {
-        *(.rodata*)
-    }
-    .data : AT(ADDR(.rodata) + SIZEOF(.rodata)) {
+    .data  : AT(ADDR(.signature) + SIZEOF(.signature)) {
         _data_start = .;
         *(.data)
         _data_end = .;
-    } > RAM32
+    } > RAM
     _data_load_start = LOADADDR(.data);
-    #define REAL_MODE_TEXT_LOCATION \
-        (MAX(0xFFFF0000, 0xFFFF0000 + (SIZEOF(.signature) + SIZEOF(.data) + SIZEOF(.rodata) + SIZEOF(.text)) - (ROM_SIZE - 64K)))
-    .real_mode_text REAL_MODE_TEXT_LOCATION - 0xFFF00000 : AT(REAL_MODE_TEXT_LOCATION)  {
+    #define LOWER_ROM_LOCATION \
+        (MAX(LOWER_ROM_START, LOWER_ROM_START + (SIZEOF(.signature) + SIZEOF(.data) - (ROM_SIZE - LOWER_ROM_SIZE))))
+    .rodata LOWER_ROM_LOCATION: AT(LOWER_ROM_LOCATION + 0xFFF00000) {
+        *(.rodata*)
+    }
+    .text . :  {
+        *(.text*)
+    }
+    .real_mode_text . :  {
         *(.real_mode_text*);
     }
     .call_real_mode 0xFFF00 : AT(0xFFFFFF00)  {
@@ -58,5 +63,10 @@ SECTIONS
         _bss_start = .;
         *(.bss*)
         _bss_end = .;
-    }
+    } > RAM
+    .bda (NOLOAD) : ALIGN(0x4) {
+        _bda_start = .;
+        *(.bda*)
+        _bda_end = .;
+    } > BDA
 }

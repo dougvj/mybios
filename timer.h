@@ -6,10 +6,10 @@
 
 typedef struct dev_timer dev_timer;
 
-dev_timer *timer_init(u32 base, u32 irq, u32 frequency);
+dev_timer *timer_init(u32 base, u32 irq);
 
 u32 timer_get_ticks(dev_timer *dev);
-u32 timer_set_frequency(dev_timer *dev, u32 frequency);void timer_watchdog(dev_timer *dev, u32 ticks);
+void timer_watchdog(dev_timer *dev, u32 ticks);
 void timer_watchdog_reset(dev_timer *dev);
 void timer_watchdog_enabled(dev_timer *dev);
 void timer_watchdog_enable(dev_timer *dev);

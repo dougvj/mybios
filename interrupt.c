@@ -21,6 +21,34 @@ void itr_set_handler(u8 vector, itr_handler handler, void* data) {
   itr_handler_data[vector] = data;
 }
 
+
+itr_handler_irq irq_handlers[16] = {};
+void **irq_handler_data[16] = {};
+
+
+void itr_handle_irq(u8 unused vector, void* unused _frame, void* data) {
+  u32 irq = (u32)data;
+  if (irq_handlers[irq]) {
+    irq_handlers[irq](irq, irq_handler_data[irq]);
+  }
+  if (irq >= 8) {
+    outb(0xA0, 0x20);
+  }
+  outb(0x20, 0x20);
+}
+
+void itr_set_irq_handler(enum itr_irq irq, itr_handler_irq handler, void* data) {
+  printf("Setting handler for irq %d to %x\n", irq, handler);
+  irq_handlers[irq] = handler;
+  irq_handler_data[irq] = data;
+  itr_set_handler(irq + 0x20, (itr_handler) itr_handle_irq, (void*)irq);
+  if (irq >= 8) {
+    itr_set_real_mode_handler(irq + 0x70, (itr_handler_real_mode)itr_handle_irq, (void*)irq);
+  } else {
+    itr_set_real_mode_handler(irq + 0x8, (itr_handler_real_mode)itr_handle_irq, (void*)irq);
+  }
+}
+
 #define interrupt __attribute__((interrupt))
 
 typedef struct {
@@ -81,8 +109,6 @@ const char INTERRUPT_MSG[] = "Interrupt %d\n";
     } else {                                                                   \
       printf(INTERRUPT_MSG, num);                                              \
     }                                                                          \
-    outb(0x20, 0x20);                                                        \
-    outb(0xA0, 0x20);                                                        \
   }
 
 DEFAULT_INTERRUPT(0)
@@ -568,7 +594,22 @@ void itr_reload_idt(void) {
   idt_ptr_t idt_ptr;
   idt_ptr.limit = sizeof(idt_entry) * 256 - 1;
   idt_ptr.base = (u32)&idt;
+  // Make sure the PIC is mapped
   asm volatile("lidt %0" : : "m"(idt_ptr));
+}
+
+void initialize_pic_protected_mode(u8 master_mask, u8 slave_mask) {
+  // Remap the PIC to protected mode
+  outb(0x20, 0x11); // begin initialization
+  outb(0xA0, 0x11);
+  outb(0x21, 0x20); // master offset
+  outb(0xA1, 0x28); // slave offset
+  outb(0x21, 0x04); // master/slave wiring
+  outb(0xA1, 0x02);
+  outb(0x21, 0x01); // 8088
+  outb(0xA1, 0x01);
+  outb(0x21, master_mask);
+  outb(0xA1, slave_mask);
 }
 
 void itr_init(void) {
@@ -597,18 +638,7 @@ void itr_init(void) {
   set_base_trap_handler(19, handle_simd_floating_point_exception);
   set_base_trap_handler(20, handle_virtualization_exception);
   set_base_trap_handler(30, handle_security_exception);
-  // Points the processor's internal register to the new IDT
-  // Initialize the PIC
-  outb(0x20, 0x11); // begin initialization
-  outb(0xA0, 0x11);
-  outb(0x21, 0x20); // master offset
-  outb(0xA1, 0x28); // slave offset
-  outb(0x21, 0x04); // master/slave wiring
-  outb(0xA1, 0x02);
-  outb(0x21, 0x01); // 8088
-  outb(0xA1, 0x01);
-  outb(0x21, 0xFF);
-  outb(0xA1, 0xFF);
+  initialize_pic_protected_mode(0xFF, 0xFF);
   itr_reload_idt();
   printf("Interrupts initialized\n");
 }
@@ -646,6 +676,37 @@ void itr_set_real_mode_handler(u8 vector, itr_handler_real_mode handler,
   real_mode_itr_data[vector] = data;
 }
 
+static void print_real_mode_stack_frame(itr_frame_real_mode* frame) {
+      printf("ip: %x\n", frame->ip);
+      printf("cs: %x\n", frame->cs);
+      printf("flags: %x\n", frame->flags);
+      printf("ax: %x\n", frame->ax);
+      printf("bx: %x\n", frame->bx);
+      printf("cx: %x\n", frame->cx);
+      printf("dx: %x\n", frame->dx);
+      printf("si: %x\n", frame->si);
+      printf("di: %x\n", frame->di);
+      printf("bp: %x\n", frame->bp);
+      printf("ds: %x\n", frame->ds);
+      printf("es: %x\n", frame->es);
+      printf("ss: %x\n", frame->ss);
+      printf("sp: %x\n", frame->sp);
+}
+
+void initialize_pic_real_mode(u8 master_mask, u8 slave_mask) {
+  // Remap the PIC for real mode
+  outb(0x20, 0x11); // begin initialization
+  outb(0xA0, 0x11);
+  outb(0x21, 0x08); // master offset
+  outb(0xA1, 0x70); // slave offset
+  outb(0x21, 0x04); // master/slave wiring
+  outb(0xA1, 0x02);
+  outb(0x21, 0x01); // 8088
+  outb(0xA1, 0x01);
+  outb(0x21, master_mask);
+  outb(0xA1, slave_mask);
+}
+
 void itr_real_mode_interrupt(void) {
   u8 *_frame;
   asm volatile("mov %%ebp, %0" : "=g"(_frame));
@@ -654,27 +715,34 @@ void itr_real_mode_interrupt(void) {
   u16 itr_vector = *itr_vector_ptr;
   _frame += 2;
   itr_frame_real_mode *frame = (itr_frame_real_mode *)(_frame);
-  // If A20 is disabled, enable it before handling the interrupt
-
+  // Save the PIC state
+  u8 pic_state[2];
+  pic_state[0] = inb(0x21);
+  pic_state[1] = inb(0xA1);
+  // Setup interrupts in protected mode
+  // TODO we should probably make sure we mask interrupts we don't handle
+  initialize_pic_protected_mode(0x00, 0x00);
+  itr_reload_idt();
   if (real_mode_irt_handlers[itr_vector] != NULL) {
     void *data = real_mode_itr_data[itr_vector];
     real_mode_irt_handlers[itr_vector](itr_vector, frame, data);
   } else {
-    printf("Got unknown real mode interrupt %x\n", itr_vector);
-    // printf("Got real mode interrupt %x\n", itr_vector);
-    printf("ip: %x\n", frame->ip);
-    printf("cs: %x\n", frame->cs);
-    printf("flags: %x\n", frame->flags);
-    printf("ax: %x\n", frame->ax);
-    printf("bx: %x\n", frame->bx);
-    printf("cx: %x\n", frame->cx);
-    printf("dx: %x\n", frame->dx);
-    printf("si: %x\n", frame->si);
-    printf("di: %x\n", frame->di);
-    printf("bp: %x\n", frame->bp);
-    printf("ds: %x\n", frame->ds);
-    printf("es: %x\n", frame->es);
-    printf("ss: %x\n", frame->ss);
-    printf("sp: %x\n", frame->sp);
+    if (itr_vector < 0x10) {
+      printf("Exception 0x%x\n", itr_vector);
+      print_real_mode_stack_frame(frame);
+      for (;;) {
+        asm("xchg %bx, %bx");
+        asm volatile("hlt");
+      }
+    }
+    else if (itr_vector >= 0x20 && itr_vector <= 0x2F) {
+      printf("unhandled irq %d\n", itr_vector - 0x20);
+    } else {
+      printf("Got unknown real mode interrupt %x\n", itr_vector);
+      // printf("Got real mode interrupt %x\n", itr_vector);
+      print_real_mode_stack_frame(frame);
+    }
   }
+  // Restore the PIC state
+  initialize_pic_real_mode(pic_state[0], pic_state[1]);
 }

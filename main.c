@@ -13,6 +13,7 @@
 #include "keyboard.h"
 #include "bios.h"
 #include "dev.h"
+#include "bda.h"
 
 u32 data_init_sentinel = 0xdeadc0de;
 
@@ -223,6 +224,12 @@ void boot_from_hd(ata_drive* drive) {
       printf("Invalid MBR signature\n");
       return;
     }
+    // Make this drive the boot drive
+    // TODO
+    dev_ata_drives[0] = *drive;
+    printf("Booting in 2 seconds...\n");
+    msleep(2000);
+    printf("Booting...!");
     vgaCls();
     set_vga_enabled(0);
     // Call real mode routine to jump into bootsector
@@ -309,13 +316,17 @@ void hd_init() {
 }
 
 void main() {
+  postCode(0x10);
+  itr_disable();
   // Init runtime after chipset init but we need to set callbacks TODO
 #ifdef ENABLE_SERIAL
   // Enable serial port before runtime init
   serial_init(115200);
 #endif
+  printf("Hello, World!\n");
   postCode(0x11);
-  chipset_init();
+  void(*chipset_init_safe)(void) = unshadowed_call(chipset_init);
+  chipset_init_safe();
   postCode(0x12);
   initRuntime();
   // Enable again in case chipset/runtime init broke internal state
@@ -359,7 +370,12 @@ void main() {
   postCode(0x16);
   itr_init();
   postCode(0x17);
-  dev_timer_primary = timer_init(0x40, IRQ0, 1000);
+  dev_timer_primary = timer_init(0x40, IRQ0);
+  u32 inc_ticks(u32 ticks) {
+    bda.irq0_counter += ticks;
+    return ticks;
+  }
+  timer_register_callback(dev_timer_primary, inc_ticks, 1);
   serial_set_buffered(1);
   postCode(0x18);
   keyboard_init();
@@ -402,8 +418,7 @@ void main() {
       .ax = 0x13,
   });
   itr_enable();
-  void (*mode13h_test_lower_addr)(void) = shadowed_call(mode13h_test);
-  mode13h_test_lower_addr();
+  mode13h_test();
 
   asm("hlt");
 }

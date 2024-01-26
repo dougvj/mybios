@@ -9,9 +9,11 @@ protect:
     mov eax, cr0
     or al, 1
     mov cr0, eax
+    PCODE 0xAA
     jmp dword 0x0008:._32main
 BITS 32
 ._32main:
+    PCODE 0x55
     ;Set up the stack to be the same as real mode
     mov eax, ss
     shl eax, 4
@@ -25,7 +27,7 @@ BITS 32
     mov fs, ax
     mov gs, ax
     mov ss, ax
-    PCODE 0x09
+    ;PCODE 0x09
     pop eax
     jmp eax
 gdt:

@@ -90,7 +90,7 @@ init_runtime_16:
     call init_serial
     mov esi, hello
     call serial_write_string
-%ifdef EARLY_VIDEO
+%ifdef ENABLE_EARLY_VIDEO
     call init_video
 %endif
     PCODE 0x08

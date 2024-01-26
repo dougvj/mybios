@@ -36,7 +36,7 @@ u8 keyboard_read_data() {
   return inb(KEYBOARD_DATA_PORT);
 }
 
-void keyboard_handler() {
+void keyboard_irq_handler(enum itr_irq unused irq, void* unused _) {
     u8 scancode = keyboard_read_data();
     printf("Got scancode from interrupt: %x\n", scancode);
     if (scancode & 0x80) {
@@ -52,14 +52,6 @@ void keyboard_handler() {
       }
     }
 };
-
-void keyboard_handler_interrupt(u8 vector, itr_frame* frame, void* data) {
-  keyboard_handler();
-}
-
-void keyboard_handler_real_mode_interrupt(u8 vector, itr_frame_real_mode* frame, void* data) {
-  keyboard_handler();
-}
 
 void keyboard_cmd(u8 cmd) {
   outb(KEYBOARD_CMD_PORT, cmd);
@@ -126,8 +118,7 @@ bool keyboard_init() {
   }
   printf("Keyboard interrupts enabled\n");
   // Enable keyboard interrupts
-  itr_set_handler(KEYBOARD_IRQ, keyboard_handler_interrupt, NULL);
-  itr_set_real_mode_handler(KEYBOARD_IRQ, keyboard_handler_real_mode_interrupt, NULL);
+  itr_set_irq_handler(KEYBOARD_IRQ, keyboard_irq_handler, NULL);
   // Enable keyboard
 
   return true;

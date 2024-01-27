@@ -240,6 +240,33 @@ u32 ata_read_lba(dev_ata *dev, u32 sector, u16 count, char *buffer) {
   return c;
 }
 
+u32 ata_write_lba(dev_ata *dev, u32 sector, u16 count, char *buffer) {
+  outb(dev->base + ATA_DRIVE_HEAD, (0xE0 | (dev->slave_selected ? 0x10 : 0)) | ((sector >> 24) & 0xF));
+  outb(dev->base + ATA_ERROR, 0);
+  outb(dev->base + ATA_SECTOR_COUNT, count);
+  outb(dev->base + ATA_LBA_LO, sector);
+  outb(dev->base + ATA_LBA_MID, sector >> 8);
+  outb(dev->base + ATA_LBA_HI, sector >> 16);
+  outb(dev->base + ATA_COMMAND, ATA_CMD_WRITE_PIO);
+  u8 s;
+  int c = 0;
+  while (c < 512 * count) {
+    while ((s = status(dev))) {
+      if (!(s & 0x80)) {
+        break;
+      }
+    }
+    for (int i = 0; i < 256; i++) {
+      u16 data;
+      data = buffer[c++];
+      data |= (u16)buffer[c++] << 8;
+      outw(dev->base + ATA_DATA, data);
+    }
+  }
+  printf("Wrote %d bytes\n", c);
+  return c;
+}
+
 
 u32 ata_read_chs(dev_ata* dev, u32 cylinder, u8 head, u16 sector, u16 count, char* buffer) {
   outb(dev->base + ATA_DRIVE_HEAD, (0xA0 | (dev->slave_selected ? 0x10 : 0)) | head);
@@ -268,4 +295,30 @@ u32 ata_read_chs(dev_ata* dev, u32 cylinder, u8 head, u16 sector, u16 count, cha
 }
 
 
+u32 ata_write_chs(dev_ata* dev, u32 cylinder, u8 head, u16 sector, u16 count, char* buffer) {
+  outb(dev->base + ATA_DRIVE_HEAD, (0xA0 | (dev->slave_selected ? 0x10 : 0)) | head);
+  outb(dev->base + ATA_ERROR, 0);
+  outb(dev->base + ATA_SECTOR_COUNT, count);
+  outb(dev->base + ATA_LBA_LO, sector);
+  outb(dev->base + ATA_LBA_MID, cylinder & 0xFF);
+  outb(dev->base + ATA_LBA_HI, (cylinder >> 8) & 0xFF);
+  outb(dev->base + ATA_COMMAND, ATA_CMD_WRITE_PIO);
+  u8 s;
+  int c = 0;
+  while (c < 512 * count) {
+    while ((s = status(dev))) {
+      if (!(s & 0x80)) {
+        break;
+      }
+    }
+    for (int i = 0; i < 256; i++) {
+      u16 data;
+      data = buffer[c++];
+      data |= (u16)buffer[c++] << 8;
+      outw(dev->base + ATA_DATA, data);
+    }
+  }
+  printf("Wrote %d bytes\n", c);
+  return c;
+}
 

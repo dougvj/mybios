@@ -29,8 +29,6 @@ void handle_timer(enum itr_irq irq, void* _timer) {
     }
   }
   timer->timer_ticks++;
-  u16* bda_timer = (u16*)(0x46c);
-  (*bda_timer)++;
   check_timer_callbacks(timer);
 }
 
@@ -98,8 +96,8 @@ dev_timer* timer_init(u32 base, u32 irq) {
   for (int i = 0; i < MAX_TIMERS; i++) {
     t->timer_callbacks[i] = NULL;
   }
-  //u16 divisor = 0xFFFF;
-  u16 divisor = 0x1500;
+  u16 divisor = 0xFFFF;
+  //u16 divisor = 0x1500;
   outb(base + 3, 0b00110100);
   outb(base, divisor & 0xFF);
   outb(base, (divisor >> 8));

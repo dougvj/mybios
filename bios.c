@@ -5,6 +5,7 @@
 #include "keyboard.h"
 #include "ata.h"
 #include "dev.h"
+#include "bda.h"
 
 
 void bios_handle_disk_interrupt(u8 vector, itr_frame_real_mode* frame, void* data) {
@@ -53,8 +54,33 @@ void bios_handle_disk_interrupt(u8 vector, itr_frame_real_mode* frame, void* dat
             if (info->flags & ATA_DRIVE_LBA28) {
               u32 lba = (cylinder * (info->heads + 1) + head) * info->sectors + sector - 1;
               ata_read_lba(info->dev, lba, num_sectors, dest);
-            } else {
+            } else{
               ata_read_chs(info->dev, cylinder, head, sector, num_sectors, dest);
+            }
+            // clear carry flag
+            frame->flags &= 0xFFFE;
+            SET_L(frame->ax, num_sectors);
+          }
+        } break;
+        case 0x3: {
+          int drive = GET_L(frame->dx);
+          if (drive == 0x80) {
+            ata_drive* info = &dev_ata_drives[0];
+            /*printf("Got read disk sectors\n");
+            printf("ax: %x\n", frame->ax);
+            printf("cx: %x\n", frame->cx);
+            printf("dx: %x\n", frame->dx);*/
+            int num_sectors = GET_L(frame->ax);
+            int cylinder = GET_H(frame->cx) | ((u32)(GET_L(frame->cx) & 0xC0) << 2);
+            int head = GET_H(frame->dx);
+            int sector = GET_L(frame->cx) & 0x3F;
+            printf("Writing %d sectors from drive %d, cylinder %d, head %d, sector %d\n", num_sectors, drive, cylinder, head, sector);
+            char* src = (char*)((u32)(frame->es <<4) + frame->bx);
+            if (info->flags & ATA_DRIVE_LBA28) {
+              u32 lba = (cylinder * (info->heads + 1) + head) * info->sectors + sector - 1;
+              ata_write_lba(info->dev, lba, num_sectors, src);
+            } else{
+              ata_write_chs(info->dev, cylinder, head, sector, num_sectors, src);
             }
             // clear carry flag
             frame->flags &= 0xFFFE;
@@ -79,19 +105,19 @@ void bios_handle_keyboard_interrupt(u8 vector, itr_frame_real_mode* frame, void*
       //printf("Got keyboard interrupt: %x\n", vector);
       switch(GET_H(frame->ax)) {
         case 0x1:
-        case 0x11:
-          printf("Got keyboard check\n");
-          if (keyboard_available()) {
+        case 0x11:{
+          u8 scancode = keyboard_get_scancode();
+          if (scancode > 0) {
             frame->flags &= ~0x40;
-            u8 scancode = keyboard_get_scancode();
             SET_H(frame->ax, scancode);
             u8 ascii = keyboard_map(scancode);
             SET_L(frame->ax, ascii);
+            printf("Got keyboard check keystroke: %x %x\n", scancode, ascii);
           } else {
             frame->flags |= 0x40;
             SET_L(frame->ax, 0x00);
           }
-          break;
+        } break;
         case 0x0:
         case 0x10:
           printf("Got keyboard read\n");
@@ -100,24 +126,24 @@ void bios_handle_keyboard_interrupt(u8 vector, itr_frame_real_mode* frame, void*
           SET_H(frame->ax, scancode);
           u8 ascii = keyboard_map(scancode);
           SET_L(frame->ax, ascii);
+          printf("Got keyboard read_keystroke: %x %x\n", scancode, ascii);
           break;
-        case 0x2:
-          printf("Get shift flags\n");
+        case 0x2: // shift status
           //SET_L(frame->ax, 0x10);
-          frame->ax = 0x00;
+          frame->ax = bda.keyboard_flags_xt;
+          break;
+        case 0x12:
+          frame->ax = bda.keyboard_flags_at;
           break;
         default:
           printf("Unhandled KB %x\n", GET_H(frame->ax));
-          while (1) {
-            asm volatile("hlt");
-          }
           break;
       }
 }
 
 void bios_handle_memory_size_interrupt(u8 vector, itr_frame_real_mode* frame, void* data) {
   printf("Got memory size interrupt: %x\n", vector);
-  frame->ax= 512;
+  frame->ax= 640 - 16;
 }
 
 void bios_handle_get_system_time(u8 vector, itr_frame_real_mode* frame, void* data) {
@@ -176,8 +202,9 @@ void bios_handle_int15(u8 vector, itr_frame_real_mode* frame, void* data) {
     case 0x88:
       printf("Got int15 get extended memory size\n");
       frame->flags &= 0xFFFE;
-      // TODO setup a parmaeter table<
-      SET_L(frame->ax, 0x700000);
+      printf("Memory size: %d\n", bda.memory_kb);
+      SET_L(frame->ax, bda.memory_kb - 1024);
+      printf("Extended memory size: %d\n", bda.memory_kb - 1024);
       break;
     case 0x24:
       switch(GET_L(frame->ax)) {

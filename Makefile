@@ -50,7 +50,7 @@ ASMFLAGS += $(DEFINES)
 DEFINES += -DROM_SIZE=${ROM_SIZE}
 
 bochs: bios.bin bios.sym
-	-rm bochs.img.lock
+	-rm *.img.lock
 	bochs -q
 
 qemu: bios.bin bios.sym

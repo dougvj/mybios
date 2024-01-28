@@ -9,7 +9,7 @@ romimage: file="./bios.bin", address=0x0, options=none
 #vgaromimage: file="/home/dougvj/archive/bios_dump/video2.bin"
 #vgaromimage: file="/usr/share/qemu/vgabios-isavga.bin"
 vgaromimage: file=$BXSHARE/VGABIOS-lgpl-latest-cirrus
-boot: floppy
+boot: disk
 floppy_bootsig_check: disabled=0
 # no floppya
 # no floppyb
@@ -36,17 +36,17 @@ cpu: count=1:1:1, model=pentium, reset_on_triple_fault=0, cpuid_limit_winnt=0, i
 print_timestamps: enabled=0
 debugger_log: -
 debug_symbols: file="bios.sym"
-magic_break: enabled=1
+#magic_break: enabled=1
 port_e9_hack: enabled=1
 private_colormap: enabled=0
-clock: sync=slowdown, time0=local, rtc_sync=0
-# clock: sync=none, time0=local, rtc_sync=0
+#clock: sync=slowdown, time0=local, rtc_sync=0
+clock: sync=none, time0=local, rtc_sync=0
 # no cmosimage
 # no loader
 log: bochs.log
 logprefix: %t%e%d
-#debug: action=report
-debug: action=ignore
+debug: action=report
+#debug: action=ignore
 #info: action=report
 error: action=report
 panic: action=ask

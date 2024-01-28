@@ -51,6 +51,8 @@ void bios_handle_disk_interrupt(u8 vector, itr_frame_real_mode* frame, void* dat
             int sector = GET_L(frame->cx) & 0x3F;
             printf("Reading %d sectors from drive %d, cylinder %d, head %d, sector %d\n", num_sectors, drive, cylinder, head, sector);
             char* dest = (char*)((u32)(frame->es <<4) + frame->bx);
+            printf("Dest: %x\n", dest);
+            printf("ss:sp: %x:%x\n", frame->ss, frame->esp);
             if (info->flags & ATA_DRIVE_LBA28) {
               u32 lba = (cylinder * (info->heads + 1) + head) * info->sectors + sector - 1;
               ata_read_lba(info->dev, lba, num_sectors, dest);
@@ -143,7 +145,7 @@ void bios_handle_keyboard_interrupt(u8 vector, itr_frame_real_mode* frame, void*
 
 void bios_handle_memory_size_interrupt(u8 vector, itr_frame_real_mode* frame, void* data) {
   printf("Got memory size interrupt: %x\n", vector);
-  frame->ax= 640 - 16;
+  frame->ax= 320;
 }
 
 void bios_handle_get_system_time(u8 vector, itr_frame_real_mode* frame, void* data) {

@@ -2,7 +2,7 @@ BITS 16
 CPU 486
 %include "pcode.asm"
 extern wait_forever
-extern fill_dummy_ivt
+extern fill_ivt
 extern init_video
 extern main
 extern enter_protected_mode
@@ -85,7 +85,7 @@ init_runtime_16:
     mov bp, 0x7C00
     mov sp, bp
     PCODE 0x03
-    call fill_dummy_ivt
+    call fill_ivt
     PCODE 0x04
     call init_serial
     mov esi, hello

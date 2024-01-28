@@ -2,9 +2,8 @@ SECTION .real_mode_text
 BITS 16
 CPU 486
 default REL
-global fill_dummy_ivt
+global fill_ivt
 global install_ivt
-
 %include "pcode.asm"
 
 extern serial_write_string
@@ -12,8 +11,9 @@ extern serial_write_byte
 extern serial_write_hex
 extern itr_real_mode_interrupt
 extern itr_reload_idt
+extern install_vectors
 
-fill_dummy_ivt:
+fill_ivt:
     xor bx, bx
     mov eax, int0
     mov cx, 0x100
@@ -23,9 +23,8 @@ fill_dummy_ivt:
     add eax, int1-int0
     cmp bx, cx
     jl .loop
-    ; Ignore timer interrupt to see if our problems go away
-    mov bx, 32
-    call install_ivt
+    ; Install special handlers written in real mode asm
+    call install_vectors
     ret
 
 
@@ -53,31 +52,28 @@ print_handler:
     iret
 
 trampoline_to_32:
-    ;xchg bx, bx
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    push bp
+    push ebx
+    push ecx
+    push edx
+    push esi
+    push edi
+    push ebp
     push ds
     push es
-    push sp
+    push esp
     push ss
+    push fs
+    push gs
     push ax ; Has the interrupt number top of stack
     mov eax, ret
     jmp 0xF000:0xFF70
 ret:
 BITS 32
+
     call itr_real_mode_interrupt
     ;cli
     ; Restore real mode idt
     lidt [real_mode_idt]
-    pop bx ; throw away the interrupt number
-    xor ecx, ecx
-    pop cx ; this will be the new ss
-    xor ebx, ebx
-    pop bx ; this will be the new sp
     jmp dword 0x18:._16_prot
 BITS 16
 ._16_prot:
@@ -90,25 +86,39 @@ BITS 16
     mov ss, ax
     jmp dword 0xF000:(.iret - 0xF0000)
 .iret:
-    ; Restore the stack then restore the registers
-    mov esp, ebx ; for some asinine reason, the high word of esp is used
-    mov ss, cx
+    pop bx ; throw away the interrupt number
+    pop gs
+    pop fs
+    ; Atomically pop the SP and SS
+    pop bx ; ss
+    pop eax; esp
+    mov ss, bx
+    mov esp, eax
     pop es
     pop ds
-    pop bp
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ;xchg bx, bx
+    pop ebp
+    pop edi
+    pop esi
+    pop edx
+    pop ecx
+    pop ebx
+    pop eax
+    lidt [esp]
+    add esp, 6
+    lgdt [esp]
+    add esp, 6
+    xchg bx, bx
     iret
 
 %macro interrupt_handler 1
 int%1:
+    xchg bx, bx
     cli
-    push ax
+    sub esp, 6
+    sgdt [esp]
+    sub esp, 6
+    sidt [esp]
+    push eax
     mov ax, %1
     jmp word trampoline_to_32
 %endmacro
@@ -119,6 +129,17 @@ interrupt_handler i
 %assign i i + 1
 %endrep
 
+handle_timer:
+    push ax
+    push ds
+    mov ax, 0x40
+    mov ds, ax
+    inc dword [ds:0x6c]
+    mov ax, 0x20
+    out 0x20, al
+    pop ds
+    pop ax
+    iret
 
 ;ax address of vector
 ;bx interrupt to install
@@ -131,7 +152,7 @@ install_ivt:
     shl bx, 2
     mov [ds:bx], ax
     add bx, 2
-    mov dword [ds:bx], 0xF000;
+    mov word [ds:bx], 0xF000;
     pop bx
     pop dx
     pop ds

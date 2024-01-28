@@ -47,17 +47,33 @@ void itr_set_handler(u8 vector, itr_handler handler, void *data);
 void itr_clear_handler(u8 vector);
 
 typedef struct {
+  u16 fs;
+  u16 gs;
   u16 ss;
-  u16 sp;
+  u32 esp;
   u16 es;
   u16 ds;
-  u16 bp;
-  u16 di;
-  u16 si;
-  u16 dx;
-  u16 cx;
-  u16 bx;
-  u16 ax;
+  u32 ebp;
+  u32 edi;
+  u32 esi;
+  union {
+    u32 edx;
+    u16 dx;
+  };
+  union {
+    u32 ecx;
+    u16 cx;
+  };
+  union {
+    u32 ebx;
+    u16 bx;
+  };
+  union {
+    u32 eax;
+    u16 ax;
+  };
+  u8 idt[6];
+  u8 gdt[6];
   u16 ip;
   u16 cs;
   u16 flags;
@@ -66,6 +82,7 @@ typedef struct {
 typedef void (*itr_handler_real_mode)(u8 vector, itr_frame_real_mode *frame, void* data);
 void itr_set_real_mode_handler(u8 vector, itr_handler_real_mode handler,
                                void *data);
+void itr_setup_real_mode(void);
 bool itr_enabled(void);
 void itr_reload_idt(void);
 #endif // __INTERRUPTS_H__

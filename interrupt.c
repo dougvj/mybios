@@ -679,21 +679,25 @@ void itr_set_real_mode_handler(u8 vector, itr_handler_real_mode handler,
 static void print_real_mode_stack_frame(itr_frame_real_mode* frame) {
       printf("ip: %x\n", frame->ip);
       printf("cs: %x\n", frame->cs);
+      printf("(eip): %x\n", (frame->cs << 4) + frame->ip);
       printf("flags: %x\n", frame->flags);
-      printf("ax: %x\n", frame->ax);
-      printf("bx: %x\n", frame->bx);
-      printf("cx: %x\n", frame->cx);
-      printf("dx: %x\n", frame->dx);
-      printf("si: %x\n", frame->si);
-      printf("di: %x\n", frame->di);
-      printf("bp: %x\n", frame->bp);
+      printf("eax: %x\n", frame->eax);
+      printf("ebx: %x\n", frame->ebx);
+      printf("ecx: %x\n", frame->ecx);
+      printf("edx: %x\n", frame->edx);
+      printf("esi: %x\n", frame->esi);
+      printf("edi: %x\n", frame->edi);
+      printf("ebp: %x\n", frame->ebp);
       printf("ds: %x\n", frame->ds);
       printf("es: %x\n", frame->es);
       printf("ss: %x\n", frame->ss);
-      printf("sp: %x\n", frame->sp);
+      printf("esp: %x\n", frame->esp);
+      printf("fs: %x\n", frame->fs);
+      printf("gs: %x\n", frame->gs);
 }
 
 void initialize_pic_real_mode(u8 master_mask, u8 slave_mask) {
+  asm volatile("cli");
   // Remap the PIC for real mode
   outb(0x20, 0x11); // begin initialization
   outb(0xA0, 0x11);
@@ -707,6 +711,10 @@ void initialize_pic_real_mode(u8 master_mask, u8 slave_mask) {
   outb(0xA1, slave_mask);
 }
 
+void itr_setup_real_mode() {
+  initialize_pic_real_mode(0x00, 0x00);
+}
+
 void itr_real_mode_interrupt(void) {
   u8 *_frame;
   asm volatile("mov %%ebp, %0" : "=g"(_frame));
@@ -716,12 +724,13 @@ void itr_real_mode_interrupt(void) {
   _frame += 2;
   itr_frame_real_mode *frame = (itr_frame_real_mode *)(_frame);
   // Save the PIC state
-  u8 pic_state[2];
+  u8 unused pic_state[2];
   pic_state[0] = inb(0x21);
   pic_state[1] = inb(0xA1);
   // Setup interrupts in protected mode
-  // TODO we should probably make sure we mask interrupts we don't handle
-  initialize_pic_protected_mode(0x00, 0x00);
+  // TODO this doesn't properly restore
+  // the PIC state and breaks DPMI
+  //initialize_pic_protected_mode(0x00, 0x00);
   itr_reload_idt();
   if (real_mode_irt_handlers[itr_vector] != NULL) {
     void *data = real_mode_itr_data[itr_vector];
@@ -744,5 +753,5 @@ void itr_real_mode_interrupt(void) {
     }
   }
   // Restore the PIC state
-  initialize_pic_real_mode(pic_state[0], pic_state[1]);
+  //initialize_pic_real_mode(pic_state[0], pic_state[1]);
 }

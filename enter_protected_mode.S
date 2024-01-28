@@ -15,10 +15,11 @@ BITS 32
 ._32main:
     PCODE 0x55
     ;Set up the stack to be the same as real mode
-    mov eax, ss
+    mov ax, ss
+    and eax, 0x0000FFFF
     shl eax, 4
-    and esp, 0x0000FFFF
-    and ebp, 0x0000FFFF
+    ;and esp, 0x0000FFFF
+    ;and ebp, 0x0000FFFF
     add esp, eax
     add ebp, eax
     mov ax, 0x10

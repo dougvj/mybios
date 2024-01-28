@@ -231,6 +231,7 @@ void boot_from_hd(ata_drive* drive) {
     msleep(2000);
     printf("Booting...!");
     vgaCls();
+    itr_setup_real_mode();
     set_vga_enabled(0);
     // Call real mode routine to jump into bootsector
     real_mode_call_params params = {

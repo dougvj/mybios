@@ -41,7 +41,12 @@ ignore:
 %endmacro
 
 install_vectors:
-  ;install_handler 0x08, handle_timer
-  ;install_handler 0x09, handle_keyboard
-  ;install_handler 0x16, ignore
+  ; This is a more efficient timer handler which doesn't do the full
+  ; context switch.
+  install_handler 0x08, handle_timer
+  install_handler 0x09, handle_keyboard
+  ; When I install this handler the infinit loop printing "Hello world"
+  ; works, but when the protected mode handler is installed it breaks
+  ; with invalid opcode after a couple of iterations.
+  install_handler 0x16, ignore
 

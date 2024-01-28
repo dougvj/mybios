@@ -729,15 +729,13 @@ void itr_real_mode_interrupt(void) {
   u32 prev_stack = (cs << 4) + esp;
   frame->esp = esp;
   frame->cs = cs;
+  // Check the order here against interrupt.asm where these are
+  // pushed on the previous stack
   frame->ebp = *(u32*)(prev_stack);
   frame->gs = *(u16*)(prev_stack + 4);
   frame->ip = *(u16*)(prev_stack + 6);
   frame->cs = *(u16*)(prev_stack + 8);
   frame->flags = *(u16*)(prev_stack + 10);
-  printf("ip: %x\n", frame->ip);
-  printf("cs: %x\n", frame->cs);
-  printf("gs: %x\n", frame->gs);
-  printf("flags: %x\n", frame->flags);
   // Save the PIC state
   u8 unused pic_state[2];
   pic_state[0] = inb(0x21);
@@ -767,6 +765,12 @@ void itr_real_mode_interrupt(void) {
       print_real_mode_stack_frame(frame);
     }
   }
+  // Copy the registers back to the old stack
+  *(u32*)(prev_stack) = frame->ebp;
+  *(u16*)(prev_stack + 4) = frame->gs;
+  *(u16*)(prev_stack + 6) = frame->ip;
+  *(u16*)(prev_stack + 8) = frame->cs;
+  *(u16*)(prev_stack + 10) = frame->flags;
   // Restore the PIC state
   //initialize_pic_real_mode(pic_state[0], pic_state[1]);
 }

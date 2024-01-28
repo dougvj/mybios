@@ -57,13 +57,9 @@ trampoline_to_32:
     push edx
     push esi
     push edi
-    push ebp
     push ds
     push es
-    push esp
-    push ss
     push fs
-    push gs
     push ax ; Has the interrupt number top of stack
     mov eax, ret
     jmp 0xF000:0xFF70
@@ -87,16 +83,9 @@ BITS 16
     jmp dword 0xF000:(.iret - 0xF0000)
 .iret:
     pop bx ; throw away the interrupt number
-    pop gs
     pop fs
-    ; Atomically pop the SP and SS
-    pop bx ; ss
-    pop eax; esp
-    mov ss, bx
-    mov esp, eax
     pop es
     pop ds
-    pop ebp
     pop edi
     pop esi
     pop edx
@@ -107,19 +96,40 @@ BITS 16
     add esp, 6
     lgdt [esp]
     add esp, 6
+    push eax
+    mov ax, 0x9c00
+    mov gs, ax
+    pop eax
+    ; Go back to real mode stack
+    mov dword esp, [gs:0]
+    mov word ss, [gs:4]
+    pop ebp ; restore ebp
+    pop gs ; restore gs, which was the first thing we pushed
     xchg bx, bx
     iret
 
 %macro interrupt_handler 1
 int%1:
-    xchg bx, bx
     cli
+    xchg bx, bx
+    push gs ; Never modified by the interrupt
+    push ebp ; Another GP register that isn't modified by the interrupt
+    mov ebp, 0x9c00; Segment of stack area, see rom_template.ld
+    mov gs, bp; ds = 0
+    mov [gs:0], esp
+    mov [gs:4], ss
+    mov ss, bp
+    ; Create our interrupt stack
+    mov dword esp, 0x1000 - 0x6
+    ; Copy ebp, gs, flags, cs, and ip, esp, and ss
+    sub esp, 18
+    ; Save the gdt and idt
     sub esp, 6
     sgdt [esp]
     sub esp, 6
     sidt [esp]
-    push eax
-    mov ax, %1
+    push eax ; save eax
+    mov ax, %1; record the interrupt number
     jmp word trampoline_to_32
 %endmacro
 

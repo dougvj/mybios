@@ -723,6 +723,21 @@ void itr_real_mode_interrupt(void) {
   u16 itr_vector = *itr_vector_ptr;
   _frame += 2;
   itr_frame_real_mode *frame = (itr_frame_real_mode *)(_frame);
+  // Copy IP, CS, and flags from the old stack
+  u32 esp = *(u32*)(0x9c000);
+  u16 cs = *(u16*)(0x9c004);
+  u32 prev_stack = (cs << 4) + esp;
+  frame->esp = esp;
+  frame->cs = cs;
+  frame->ebp = *(u32*)(prev_stack);
+  frame->gs = *(u16*)(prev_stack + 4);
+  frame->ip = *(u16*)(prev_stack + 6);
+  frame->cs = *(u16*)(prev_stack + 8);
+  frame->flags = *(u16*)(prev_stack + 10);
+  printf("ip: %x\n", frame->ip);
+  printf("cs: %x\n", frame->cs);
+  printf("gs: %x\n", frame->gs);
+  printf("flags: %x\n", frame->flags);
   // Save the PIC state
   u8 unused pic_state[2];
   pic_state[0] = inb(0x21);

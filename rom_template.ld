@@ -16,7 +16,8 @@ ENTRY("reset_vector")
 
 MEMORY
 {
-    RAM (rw) : ORIGIN = 0x9c000, LENGTH = 16K
+    RAM (rw) : ORIGIN = 0x9d000, LENGTH = 12K
+    STACK (rw) : ORIGIN = 0x9c000, LENGTH = 4K
     BDA (rw) : ORIGIN = 0x400, LENGTH = 0x100
     LOWER_ROM (rx) : ORIGIN = LOWER_ROM_START, LENGTH = LOWER_ROM_SIZE
     UPPER_ROM (rx) : ORIGIN = ROM_START, LENGTH = ROM_SIZE
@@ -69,4 +70,9 @@ SECTIONS
         *(.bda*)
         _bda_end = .;
     } > BDA
+    .stack (NOLOAD) : ALIGN(0x4) {
+        _stack_start = .;
+        *(.stack*)
+        _stack_end = .;
+    } > STACK
 }

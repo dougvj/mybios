@@ -48,12 +48,8 @@ void itr_clear_handler(u8 vector);
 
 typedef struct {
   u16 fs;
-  u16 gs;
-  u16 ss;
-  u32 esp;
   u16 es;
   u16 ds;
-  u32 ebp;
   u32 edi;
   u32 esi;
   union {
@@ -74,6 +70,10 @@ typedef struct {
   };
   u8 idt[6];
   u8 gdt[6];
+  u32 esp;
+  u32 ebp;
+  u16 ss;
+  u16 gs;
   u16 ip;
   u16 cs;
   u16 flags;

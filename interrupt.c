@@ -734,6 +734,11 @@ void itr_real_mode_interrupt(void) {
   frame->ip = *(u16*)(prev_stack + 8);
   frame->cs = *(u16*)(prev_stack + 10);
   frame->flags = *(u16*)(prev_stack + 12);
+  if (frame->ebp & 0xFFFF0000) {
+    // TODO Figure out why this happens, somehow the stack is getting corrupted
+    // and the high word of ebp is using the 9 clearly from our stack
+    frame->ebp = frame->ebp & 0xFFFF;
+  }
   // Save the PIC state
   //u8 unused pic_state[2];
   //pic_state[0] = inb(0x21);

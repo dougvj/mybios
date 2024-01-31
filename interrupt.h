@@ -50,26 +50,54 @@ typedef struct {
   u16 fs;
   u16 es;
   u16 ds;
-  u32 edi;
-  u32 esi;
+  union {
+    u32 edi;
+    u16 di;
+  };
+  union {
+    u32 esi;
+    u16 si;
+  };
   union {
     u32 edx;
-    u16 dx;
+    union {
+      u16 dx;
+      struct {
+        u8 dl;
+        u8 dh;
+      } packed;
+    };
   };
   union {
     u32 ecx;
-    u16 cx;
+    union {
+      u16 cx;
+      struct {
+        u8 cl;
+        u8 ch;
+      } packed;
+    };
   };
   union {
     u32 ebx;
-    u16 bx;
+    union {
+      u16 bx;
+      struct {
+        u8 bl;
+        u8 bh;
+      } packed;
+    };
   };
   union {
     u32 eax;
-    u16 ax;
+    union {
+      u16 ax;
+      struct {
+        u8 al;
+        u8 ah;
+      } packed;
+    };
   };
-  u8 idt[6];
-  u8 gdt[6];
   u32 esp;
   u32 ebp;
   u16 ss;

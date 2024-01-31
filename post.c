@@ -100,11 +100,13 @@ void checkRam() {
   printf("%d KB Extended Memory\n", extended);
   printf("%d KB Total\n", total);
   bda.memory_kb = total;
+  // TODO CMOS Writes cause reboots on the UMC board I have, TODO
+  // Maybe needs a delay?
   // Write the total memory size to the CSMOS
-  outb(0x70, 0x30);
+  /*outb(0x70, 0x30);
   outb(0x71, total & 0xFF);
   outb(0x70, 0x31);
-  outb(0x71, total >> 8);
+  outb(0x71, total >> 8);*/
 
   /*printf("Testing Conventional Memory\n");
   void(*testRamLower)(u32, u32, int) = (void*)shadowed_call(testRam);
@@ -152,7 +154,6 @@ int probeSpeed() {
 
 int probeMemSpeed() {
   // DIsable cache
-  asm("cli");
   asm("mov %cr0, %eax");
   asm("or %eax, 0x40000000");
   asm("mov %eax, %cr0");
@@ -190,7 +191,6 @@ int probeMemSpeed() {
       "wbinvd\n"
       "mov %%eax, %%cr0\n"
       : : : "eax");
-  asm("sti");
   return total / NUM_SAMPLES;
 }
 

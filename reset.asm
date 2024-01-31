@@ -47,9 +47,9 @@ entry_point:
     PCODE 0x00
     cli
     PCODE 0x01
-    ;call wait_forever
-    ;call wait_forever
-    ;call wait_forever
+    call wait_forever
+    call wait_forever
+    call wait_forever
     ;Wait for ram stabilitiy if ever
     mov si, 0x0000
     mov cx, 0x0000

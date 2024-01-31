@@ -184,8 +184,14 @@ void controller_cmd(u8 cmd) {
 }
 
 void keyboard_send_data(u8 data) {
-  while ((inb(KEYBOARD_STATUS_PORT) & INPUT_BUFFER_FULL) != 0)
-    ;
+  int start_ticks = timer_get_ticks(dev_timer_primary);
+  while ((inb(KEYBOARD_STATUS_PORT) & INPUT_BUFFER_FULL) != 0) {
+    printf("Ticks: %d\n", timer_get_ticks(dev_timer_primary));
+    if (timer_get_ticks(dev_timer_primary) - start_ticks > 100) {
+      printf("Keyboard send data timeout. Keyboard error?\n");
+      return;
+    }
+  };
   outb(KEYBOARD_DATA_PORT, data);
 }
 
@@ -211,13 +217,16 @@ u8 controller_config_read() {
 
 u8 keyboard_transact(u8 data) {
   printf("Keyboard transact: ->%x\n", data);
+  int timer_ticks = timer_get_ticks(dev_timer_primary);
   do {
     keyboard_send_data(data);
     data = keyboard_read_data();
-  } while (data == 0xFE);
-  if (data != 0xFA) {
-    printf("Keyboard transact failed: %x\n", data);
-  }
+    printf("Keyboard transact: <-%x\n", data);
+    if (timer_get_ticks(dev_timer_primary) - timer_ticks > 18) {
+      printf("Keyboard transact timeout\n");
+      return 0;
+    }
+  } while (data != 0xFA);
   printf("Keyboard transact: <-%x\n", data);
   return data;
 }

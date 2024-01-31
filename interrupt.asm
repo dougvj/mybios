@@ -4,6 +4,7 @@ CPU 486
 default REL
 global fill_ivt
 global install_ivt
+global trampoline_to_32
 %include "pcode.asm"
 
 extern serial_write_string
@@ -12,6 +13,7 @@ extern serial_write_hex
 extern itr_real_mode_interrupt
 extern itr_reload_idt
 extern install_vectors
+extern printf
 
 fill_ivt:
     xor bx, bx
@@ -33,6 +35,9 @@ msg:
 endl:
   db 0xa, 0xd, 0
 
+stack_overflow_msg:
+  db "Stack Overflow", 0
+
 print_handler:
     push ds
     mov ax, 0xF000
@@ -52,6 +57,21 @@ print_handler:
     iret
 
 trampoline_to_32:
+    push gs ;
+    push ebp ;
+    mov ebp, 0x9c00; Segment of stack area, see rom_template.ld
+    mov gs, bp; ds = 0
+    mov [gs:0], esp
+    mov [gs:4], ss
+    ; Sentinel value
+    mov dword [gs:8], 0x12345678
+    mov ss, ebp
+    ; Use interrup stack
+    mov sp, 0x1000
+    ; Copy ebp, gs, flags, cs, and ip, esp, and ss,
+    ; to the interrupt stack in interrupt.c
+    sub sp, 18
+    push eax ; save eax
     push ebx
     push ecx
     push edx
@@ -60,8 +80,17 @@ trampoline_to_32:
     push ds
     push es
     push fs
-    push ax ; Has the interrupt number top of stack
+    mov ds, [gs:4]
+    mov si, [gs:0]
+    mov bx, [ds:si + 6]
+    cmp bx, 0x16
+    jne .not_16
+    mov eax, skip_call
+    ;xchg bx, bx
+    jmp iret
+    .not_16:
     mov eax, ret
+.enter_32:
     jmp 0xF000:0xFF70
 ret:
 BITS 32
@@ -70,19 +99,45 @@ BITS 32
     ;cli
     ; Restore real mode idt
     lidt [real_mode_idt]
+skip_call:
+    ; Check that our stack is still valid
+    mov eax, 0x9c008
+    cmp dword [eax], 0x12345678
+    jne .stack_overflow
     jmp dword 0x18:._16_prot
+.stack_overflow:
+    push stack_overflow_msg
+    call printf
+.hlt:
+    hlt
+    jmp .hlt
 BITS 16
 ._16_prot:
     mov eax, cr0
     and eax, 0xFFFFFFFE
     mov cr0, eax
-    mov ax, 0x00
+    xor ax, ax
     mov ds, ax
     mov es, ax
+    mov fs, ax
+    mov gs, ax
     mov ss, ax
-    jmp dword 0xF000:(.iret - 0xF0000)
-.iret:
-    pop bx ; throw away the interrupt number
+    jmp dword 0xF000:(iret - 0xF0000)
+iret:
+    ; Restore real mode stack
+    mov ax, 0x9c00
+    mov gs, ax
+    mov ss, ax
+    shl eax, 4
+    sub esp, eax
+    ; Lookup interrupt number
+    mov ds, [gs:4]
+    mov si, [gs:0]
+    mov ax, [ds:si + 6]
+    cmp ax, 0x16
+    jne .not_16
+    ;xchg bx, bx
+.not_16:
     pop fs
     pop es
     pop ds
@@ -92,44 +147,20 @@ BITS 16
     pop ecx
     pop ebx
     pop eax
-    lidt [esp]
-    add esp, 6
-    lgdt [esp]
-    add esp, 6
-    push eax
-    mov ax, 0x9c00
-    mov gs, ax
-    pop eax
     ; Go back to real mode stack
     mov dword esp, [gs:0]
     mov word ss, [gs:4]
     pop ebp ; restore ebp
-    pop gs ; restore gs, which was the first thing we pushed
+    pop gs ; restore gs, which was the second thing we pushed
+    add sp, 2; throw away the interrupt number
     xchg bx, bx
     iret
 
 %macro interrupt_handler 1
 int%1:
-    cli
     xchg bx, bx
-    push gs ; Never modified by the interrupt
-    push ebp ; Another GP register that isn't modified by the interrupt
-    mov ebp, 0x9c00; Segment of stack area, see rom_template.ld
-    mov gs, bp; ds = 0
-    mov [gs:0], esp
-    mov [gs:4], ss
-    mov ss, bp
-    ; Create our interrupt stack
-    mov dword esp, 0x1000 - 0x6
-    ; Copy ebp, gs, flags, cs, and ip, esp, and ss
-    sub esp, 18
-    ; Save the gdt and idt
-    sub esp, 6
-    sgdt [esp]
-    sub esp, 6
-    sidt [esp]
-    push eax ; save eax
-    mov ax, %1; record the interrupt number
+    cli
+    push word %1
     jmp word trampoline_to_32
 %endmacro
 
@@ -138,18 +169,6 @@ int%1:
 interrupt_handler i
 %assign i i + 1
 %endrep
-
-handle_timer:
-    push ax
-    push ds
-    mov ax, 0x40
-    mov ds, ax
-    inc dword [ds:0x6c]
-    mov ax, 0x20
-    out 0x20, al
-    pop ds
-    pop ax
-    iret
 
 ;ax address of vector
 ;bx interrupt to install

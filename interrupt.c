@@ -719,27 +719,25 @@ void itr_real_mode_interrupt(void) {
   u8 *_frame;
   asm volatile("mov %%ebp, %0" : "=g"(_frame));
   _frame += 8; // advance by 8 to account for EIP and EBP pushed on the stack
-  u16 *itr_vector_ptr = (u16 *)(_frame);
-  u16 itr_vector = *itr_vector_ptr;
-  _frame += 2;
   itr_frame_real_mode *frame = (itr_frame_real_mode *)(_frame);
   // Copy IP, CS, and flags from the old stack
   u32 esp = *(u32*)(0x9c000);
-  u16 cs = *(u16*)(0x9c004);
-  u32 prev_stack = (cs << 4) + esp;
+  u16 ss = *(u16*)(0x9c004);
+  u32 prev_stack = (ss << 4) + (esp & 0xFFFF);
   frame->esp = esp;
-  frame->cs = cs;
+  frame->ss = ss;
   // Check the order here against interrupt.asm where these are
   // pushed on the previous stack
   frame->ebp = *(u32*)(prev_stack);
   frame->gs = *(u16*)(prev_stack + 4);
-  frame->ip = *(u16*)(prev_stack + 6);
-  frame->cs = *(u16*)(prev_stack + 8);
-  frame->flags = *(u16*)(prev_stack + 10);
+  u16 itr_vector = *(u16*)(prev_stack + 6);
+  frame->ip = *(u16*)(prev_stack + 8);
+  frame->cs = *(u16*)(prev_stack + 10);
+  frame->flags = *(u16*)(prev_stack + 12);
   // Save the PIC state
-  u8 unused pic_state[2];
-  pic_state[0] = inb(0x21);
-  pic_state[1] = inb(0xA1);
+  //u8 unused pic_state[2];
+  //pic_state[0] = inb(0x21);
+  //pic_state[1] = inb(0xA1);
   // Setup interrupts in protected mode
   // TODO this doesn't properly restore
   // the PIC state and breaks DPMI
@@ -768,9 +766,9 @@ void itr_real_mode_interrupt(void) {
   // Copy the registers back to the old stack
   *(u32*)(prev_stack) = frame->ebp;
   *(u16*)(prev_stack + 4) = frame->gs;
-  *(u16*)(prev_stack + 6) = frame->ip;
-  *(u16*)(prev_stack + 8) = frame->cs;
-  *(u16*)(prev_stack + 10) = frame->flags;
+  *(u16*)(prev_stack + 8) = frame->ip;
+  *(u16*)(prev_stack + 10) = frame->cs;
+  *(u16*)(prev_stack + 12) = frame->flags;
   // Restore the PIC state
   //initialize_pic_real_mode(pic_state[0], pic_state[1]);
 }

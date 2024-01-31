@@ -21,12 +21,6 @@ typedef signed long long i64;
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
 
-#define GET_L(x) ((x)&0xFF)
-#define GET_H(x) (((x) >> 8) & 0xFF)
-#define SET_L(x, v) ((x) = ((x)&0xFF00) | ((v)&0xFF))
-#define SET_H(x, v) ((x) = ((x)&0xFF) | (((u16)(v)&0xFF) << 8))
-#define SET_LH(x, l, h) ((x) = (((u16)(h)&0xFF) << 8) | ((l)&0xFF))
-
 #undef NULL
 #define NULL nullptr
 

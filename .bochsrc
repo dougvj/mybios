@@ -36,7 +36,7 @@ cpu: count=1:1:1, model=pentium, reset_on_triple_fault=0, cpuid_limit_winnt=0, i
 print_timestamps: enabled=0
 debugger_log: -
 debug_symbols: file="bios.sym"
-#magic_break: enabled=1
+magic_break: enabled=1
 port_e9_hack: enabled=1
 private_colormap: enabled=0
 #clock: sync=slowdown, time0=local, rtc_sync=0

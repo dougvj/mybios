@@ -80,15 +80,7 @@ trampoline_to_32:
     push ds
     push es
     push fs
-    mov ds, [gs:4]
-    mov si, [gs:0]
-    mov bx, [ds:si + 6]
-    cmp bx, 0x16
-    jne .not_16
-    mov eax, skip_call
     ;xchg bx, bx
-    jmp iret
-    .not_16:
     mov eax, ret
 .enter_32:
     jmp 0xF000:0xFF70
@@ -130,14 +122,6 @@ iret:
     mov ss, ax
     shl eax, 4
     sub esp, eax
-    ; Lookup interrupt number
-    mov ds, [gs:4]
-    mov si, [gs:0]
-    mov ax, [ds:si + 6]
-    cmp ax, 0x16
-    jne .not_16
-    ;xchg bx, bx
-.not_16:
     pop fs
     pop es
     pop ds
@@ -153,12 +137,10 @@ iret:
     pop ebp ; restore ebp
     pop gs ; restore gs, which was the second thing we pushed
     add sp, 2; throw away the interrupt number
-    xchg bx, bx
     iret
 
 %macro interrupt_handler 1
 int%1:
-    xchg bx, bx
     cli
     push word %1
     jmp word trampoline_to_32

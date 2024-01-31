@@ -151,9 +151,13 @@ void bios_handle_memory_size_interrupt(u8 vector, itr_frame_real_mode* frame, vo
 }
 
 void bios_handle_get_system_time(u8 unused vector, itr_frame_real_mode* frame, void* unused data) {
-  printf("Got system time interrupt: %x\n", vector);
-  frame->cx = 0x0;
-  frame->dx = 0x0;
+  printf("Got system time interrupt: %x, AH:0x%x\n", vector, frame->ah);
+  u32 ticks = bda.irq0_counter;
+  u32 seconds = ticks / 18;
+  frame->dx = seconds & 0xFFFF;
+  frame->cx = (seconds >> 16) & 0xFFFF;
+  printf("Seconds: %d\n", seconds);
+
   frame->flags &= 0xFFFE;
 }
 
@@ -201,7 +205,7 @@ void bios_handle_serial_port(u8 vector, itr_frame_real_mode* frame, void* unused
 }
 
 void bios_handle_int15(u8 vector, itr_frame_real_mode* frame, void* unused data) {
-  printf("Got int15 interrupt: %x\n", vector);
+  //printf("Got int15 interrupt: %x\n", vector);
   switch (frame->ah) {
     case 0x87:
       printf("Got int16 extended memory copy\n");
@@ -239,6 +243,16 @@ void bios_handle_int15(u8 vector, itr_frame_real_mode* frame, void* unused data)
     case 0xC0:
       printf("Got int15 get system configuration\n");
       frame->flags |= 0x1;
+      break;
+    case 0x41:
+      //printf("Got int15 wait on event\n");
+      switch(frame->al) {
+        case 0x00:{
+          u32 unused ptr = (frame->es << 4) + frame->di;
+          //printf("Waiting for event %x\n", ptr);
+          //printf("Timeout: %d\n", frame->bx);
+        } break;
+      }
       break;
     default:
       printf("Got unknown int15 interrupt: 0x%x\n", frame->ax);

@@ -379,15 +379,15 @@ void main() {
   timer_register_callback(dev_timer_primary, inc_ticks, 1);
   serial_set_buffered(1);
   postCode(0x18);
-  keyboard_init();
-  postCode(0x19);
   hd_init();
-  postCode(0x1A);
+  postCode(0x19);
   bios_init();
-  postCode(0x1B);
+  postCode(0x1A);
   itr_enable();
+  postCode(0x1B);
+  keyboard_init();
   postCode(0x1C);
-  // mode13h_test();
+  /*
   detect_shadowing(0xFFFF0000, 1);
   bool unused rom_region_writable =
     detect_shadowing(0xF0000, 1);
@@ -395,6 +395,7 @@ void main() {
   detect_shadowing(0xE0000, 1);
   detect_shadowing(0xD0000, 1);
   detect_shadowing(0xB0000, 1);
+  */
   // void(*chipset_explore_lower_addr)(void) = shadowed_call(chipset_explore);
   //  Note: interrupts break real_mode_int even when not enabled
   //  TODO

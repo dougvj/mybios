@@ -216,18 +216,18 @@ u8 controller_config_read() {
 }
 
 u8 keyboard_transact(u8 data) {
-  printf("Keyboard transact: ->%x\n", data);
+  //printf("Keyboard transact: ->%x\n", data);
   int timer_ticks = timer_get_ticks(dev_timer_primary);
   do {
     keyboard_send_data(data);
     data = keyboard_read_data();
-    printf("Keyboard transact: <-%x\n", data);
+    //printf("Keyboard transact: <-%x\n", data);
     if (timer_get_ticks(dev_timer_primary) - timer_ticks > 18) {
-      printf("Keyboard transact timeout\n");
+      //printf("Keyboard transact timeout\n");
       return 0;
     }
   } while (data != 0xFA);
-  printf("Keyboard transact: <-%x\n", data);
+  //printf("Keyboard transact: <-%x\n", data);
   return data;
 }
 
@@ -242,7 +242,7 @@ bool keyboard_init() {
   // Disable devices
   controller_cmd(0xAD);
   // controller_cmd(0xA7);
-  printf("Test keyboard controller\n");
+  //printf("Test keyboard controller\n");
   // Test controller
   controller_cmd(0xAA);
   u8 status = keyboard_read_data();
@@ -258,11 +258,11 @@ bool keyboard_init() {
   config |= 0x01;
   printf("Config: %x\n", config);
   controller_config_write(config);
-  printf("Enable keyboard controller\n");
+  //printf("Enable keyboard controller\n");
   // Enable devices
   controller_cmd(0xAE);
   // controller_cmd(0xA8);
-  printf("Reset keyboard\n");
+  //printf("Reset keyboard\n");
   // Reset devices
   bool reset = false;
   for (int i = 0; i < 10; i++) {

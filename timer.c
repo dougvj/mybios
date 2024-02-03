@@ -42,13 +42,13 @@ u32 timer_get_ticks(dev_timer* timer) { return timer->timer_ticks; }
 
 
 timer_callback_id timer_register_callback(dev_timer* timer, timer_callback callback, u32 interval) {
-  printf("Registering timer callback\n");
+  //printf("Registering timer callback\n");
   for (int i = 0; i < MAX_TIMERS; i++) {
     if (timer->timer_callbacks[i] == NULL) {
       timer->timer_callbacks[i] = callback;
       timer->callback_intervals[i] = interval;
       timer->callback_counters[i] = 0;
-      printf("Registered timer callback %d\n", i);
+      //printf("Registered timer callback %d\n", i);
       return i;
     }
   }

@@ -53,6 +53,9 @@ The BIOS can be tested under QEMU or Bochs:
 # Bochs
 bochs -f .bochsrc
 ```
+## LLM Usage
+
+The project was completed without the use of LLMs with the exception of the documentation such as this README
 
 ## License
 

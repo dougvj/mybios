@@ -32,15 +32,15 @@ optramimage4: file=none
 pci: enabled=1, chipset=i440fx, slot1=pcivga, slot2=ne2k
 #vga: extension=vbe, update_freq=5, realtime=1
 vga: extension=cirrus, update_freq=5, realtime=1
-cpu: count=1:1:1, model=pentium, reset_on_triple_fault=0, cpuid_limit_winnt=0, ignore_bad_msrs=1, mwait_is_nop=0
+cpu: count=1:1:1, model=pentium, reset_on_triple_fault=0, cpuid_limit_winnt=0, ignore_bad_msrs=1, mwait_is_nop=0, ips=25000000
 print_timestamps: enabled=0
 debugger_log: -
 debug_symbols: file="bios.sym"
 magic_break: enabled=1
 port_e9_hack: enabled=1
 private_colormap: enabled=0
-#clock: sync=slowdown, time0=local, rtc_sync=0
-clock: sync=none, time0=local, rtc_sync=0
+clock: sync=slowdown, time0=local, rtc_sync=0
+#clock: sync=none, time0=local, rtc_sync=0
 # no cmosimage
 # no loader
 log: bochs.log

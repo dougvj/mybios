@@ -1,7 +1,7 @@
 #include "interrupt.h"
 #include "ata.h"
 #include "io.h"
-#include "stdio.h"
+#include "output.h"
 
 typedef struct {
   u16 offset_low;

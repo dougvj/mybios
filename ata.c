@@ -44,7 +44,7 @@ enum ata_commands {
   ATA_CMD_IDENTIFY = 0xEC
 };
 
-// divide by 2 because we lookup u16s
+// Offsets are in u16
 enum ata_identify {
   ATA_IDENT_DEVICETYPE = 0,
   ATA_IDENT_CYLINDERS = 1,

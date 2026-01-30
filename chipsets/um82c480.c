@@ -195,7 +195,7 @@ void chipset_init() {
   printf("CR0: %x\n", cr0);
   // Not sure what this does. Bus states?
   writeReg480(0x91, 0x0E);
-  // writeReg480(0x92, 0xF0);
+  writeReg480(0x92, 0xF0);
 }
 
 int detect_shadowing(int address, int msg);

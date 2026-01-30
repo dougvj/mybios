@@ -4,28 +4,45 @@ CFLAGS=-fno-stack-protector \
 			 -std=gnu2x \
 			 -Os \
 			 -fno-pic \
-			 -nostdlib \
-			 -m32 \
+			 -fno-builtin \
 			 -march=i386\
 			 -mgeneral-regs-only \
-			 -ffreestanding \
-			 -fno-builtin \
-			 -fno-asynchronous-unwind-tables \
-			 -fno-exceptions \
 			 -Wno-unused-parameter \
 			 -Wno-unused-function \
 			 -Wno-array-bounds \
+			 -Wno-main \
 			 -funsigned-char \
 			 -Wall \
 			 -Wextra \
 			 -I./
 
 CFLAGS += -Werror
-CC=gcc
-CHIPSET=440fx
+# Check for i386-elf-gcc
+ifeq (, $(shell which i386-elf-gcc))
+CC=x86_64-pc-linux-gnu-gcc
+LD=x86_64-pc-linux-gnu-ld
+OBJDUMP=x86_64-pc-linux-gnu-objdump
+OBJCOPY=x86_64-pc-linux-gnu-objcopy
+CFLAGS += -ffreestanding -nostdlib -m32
+$(warning i386-elf-gcc not found, using x86_64-pc-linux-gnu-gcc)
+else
+CC=i386-elf-gcc
+LD=i386-elf-ld
+OBJDUMP=i386-elf-objdump
+OBJCOPY=i386-elf-objcopy
+endif
+# This is the C preprocessor, not the C++
+CPP=cpp
+#CHIPSET=440fx
 #CHIPSET=null
 #CHIPSET=sis8c460
 #CHIPSET=um82c480
+# If chipset isn't set throw an error
+ifeq ($(CHIPSET),)
+# Get a list from the chipsets directory
+CHIPSETs=$(shell ls chipsets | grep \\.c | sed 's/\.c//')
+$(error CHIPSET is not set, please set it to one of: $(CHIPSETs))
+endif
 C_SRC = $(wildcard *.c)
 ASM_SRC = $(wildcard *.asm)
 ASM_BLOB_SRC = $(wildcard *.S)
@@ -38,7 +55,7 @@ all: bios.bin
 ROM_SIZE=64k
 
 DEFINES=
-DEFINES += -DBOCHS
+#DEFINES += -DBOCHS
 #DEFINES += -DDEBUG
 #DEFINES += -DENABLE_SERIAL
 #DEFINES += -DENABLE_EARLY_SERIAL
@@ -66,16 +83,16 @@ padded: bios.bin
 	chmod +x  padded_bios_*.bin
 
 rom.ld: rom_template.ld
-	cpp -DSTAY_IN_LOW_MEMORY -DROM_SIZE=${ROM_SIZE} -P rom_template.ld -o rom.ld
+	$(CPP) -DSTAY_IN_LOW_MEMORY -DROM_SIZE=${ROM_SIZE} -P rom_template.ld -o rom.ld
 
 bios.sym: bios.elf
-	objdump -t bios.elf | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > bios.sym
+	$(OBJDUMP) -t bios.elf | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > bios.sym
 
 bios.bin: bios.elf
-	objcopy -O binary bios.elf bios.bin
+	$(OBJCOPY) -O binary bios.elf bios.bin
 
 bios.elf: rom.ld $(C_OBJECTS) $(ASM_OBJECTS) backend_chipset.o
-	ld -T $^ -o bios.elf
+	$(LD) -T $^ -o bios.elf
 
 eprom-emu: bios.bin
 	eprom-emu-ng ./bios.bin /dev/ttyUSB0

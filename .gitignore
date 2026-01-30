@@ -8,3 +8,20 @@ rom.ld
 *.pid
 *.txt
 serial.out
+
+# Emulator disk images and dumps
+*.img
+*.img.lock
+dump*
+
+# IDE / editor
+.cache/
+compile_commands.json
+bx_enh_dbg.ini
+
+# Backups
+*.bak
+*.bak.*
+
+# NFS artifacts
+.nfs*
